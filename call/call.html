@@ -57,23 +57,26 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-analytics.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
         import CallConnection from './socket.js';
 
         // Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyDm9QP8ICqZtGqwnx4lhHGLR5aBE0R2TaE",
-            authDomain: "signai-7bba1.firebaseapp.com",
-            projectId: "signai-7bba1",
-            storageBucket: "signai-7bba1.appspot.com",
-            messagingSenderId: "1020927326978",
-            appId: "1:1020927326978:web:c7e2a3c7fe8df470f3d6f0"
+            apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
+            authDomain: "signai-ea820.firebaseapp.com",
+            projectId: "signai-ea820",
+            storageBucket: "signai-ea820.firebasestorage.app",
+            messagingSenderId: "88913376198",
+            appId: "1:88913376198:web:bd13282673a2a8415fb8c7",
+            measurementId: "G-7W3MJTFNSR"
         };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
@@ -86,6 +89,7 @@
         if (!targetUserId) {
             alert('No target user selected. Redirecting to home page...');
             window.location.href = '../home/home.html';
+            throw new Error('No target user ID provided');
         }
 
         // Handle role selection
@@ -94,38 +98,40 @@
         const startCallBtn = document.getElementById('startCallBtn');
         let selectedRole = null;
 
-        document.querySelectorAll('input[name="role"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                selectedRole = e.target.value;
-                startCallBtn.disabled = false;
-            });
-        });
-
-        startCallBtn.addEventListener('click', async () => {
-            if (!selectedRole) return;
-            
-            roleModal.style.display = 'none';
-            container.style.display = 'flex';
-            
-            const localVideo = document.getElementById('localVideo');
-            const remoteVideo = document.getElementById('remoteVideo');
-            const aiOutput = document.querySelector('.ai-output');
-
-            try {
-                callConnection = new CallConnection(db, auth, localVideo, remoteVideo, aiOutput);
-                await callConnection.initializeCall(selectedRole, targetUserId);
-            } catch (error) {
-                console.error('Failed to initialize call:', error);
-                alert('Failed to initialize call. Please try again.');
-                window.location.href = '/';
-            }
-        });
-
-        // Check authentication
+        // Check authentication first
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = '../login/login.html';
+                return;
             }
+            
+            // Only setup role selection after confirming authentication
+            document.querySelectorAll('input[name="role"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    selectedRole = e.target.value;
+                    startCallBtn.disabled = false;
+                });
+            });
+
+            startCallBtn.addEventListener('click', async () => {
+                if (!selectedRole) return;
+                
+                roleModal.style.display = 'none';
+                container.style.display = 'flex';
+                
+                const localVideo = document.getElementById('localVideo');
+                const remoteVideo = document.getElementById('remoteVideo');
+                const aiOutput = document.querySelector('.ai-output');
+
+                try {
+                    callConnection = new CallConnection(db, auth, localVideo, remoteVideo, aiOutput);
+                    await callConnection.initializeCall(selectedRole, targetUserId);
+                } catch (error) {
+                    console.error('Failed to initialize call:', error);
+                    alert('Failed to initialize call. Please try again.');
+                    window.location.href = '../home/home.html';
+                }
+            });
         });
 
         // Handle end call button
