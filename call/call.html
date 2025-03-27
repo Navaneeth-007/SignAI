@@ -83,8 +83,9 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
+        import CallConnection from './socket.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
@@ -101,24 +102,8 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        let localStream;
-        let remoteStream;
-        let peerConnection;
-        let callDoc;
-        let callId;
-        let userRole;
-        let websocket;
-        let mediaRecorder;
-        let audioChunks = [];
-        let isProcessingFrame = false;
-
-        const servers = {
-            iceServers: [
-                {
-                    urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'],
-                },
-            ],
-        };
+        let callConnection = null;
+        let userRole = null;
 
         // Get DOM elements
         const setupModal = document.getElementById('setupModal');
@@ -131,149 +116,6 @@
         const endCallBtn = document.getElementById('endCallBtn');
         const roleIndicator = document.querySelector('.role-indicator');
         const aiOutput = document.getElementById('aiOutput');
-        const interpretationText = aiOutput.querySelector('.interpretation-text');
-        const interpretationAudio = document.getElementById('interpretationAudio');
-
-        // Connect to WebSocket server with retry
-        function connectWebSocket() {
-            let retryCount = 0;
-            const maxRetries = 3;
-            const retryDelay = 2000; // 2 seconds
-            
-            function connect() {
-                try {
-                    console.log('Attempting to connect to WebSocket server...');
-                    websocket = new WebSocket('ws://localhost:8765');
-                    
-                    websocket.onopen = () => {
-                        console.log('Connected to WebSocket server');
-                        retryCount = 0;
-                        // Send initial role
-                        websocket.send(JSON.stringify({ role: userRole }));
-                    };
-                    
-                    websocket.onmessage = (event) => {
-                        const data = JSON.parse(event.data);
-                        console.log('Received message:', data);
-                        
-                        if (data.type === 'connection_status') {
-                            if (data.status === 'connected') {
-                                console.log(`Connected as ${data.role} user`);
-                                // Start processing based on role
-                                if (userRole === 'accessibility') {
-                                    startVideoProcessing();
-                                } else {
-                                    startAudioProcessing();
-                                }
-                            }
-                        } else if (data.type === 'interpretation') {
-                            // Display text interpretation
-                            interpretationText.textContent = data.text;
-                            aiOutput.classList.add('active');
-                            
-                            // Play audio interpretation
-                            if (data.audio) {
-                                interpretationAudio.src = `data:audio/mp3;base64,${data.audio}`;
-                            }
-                        } else if (data.type === 'error') {
-                            console.error('Server error:', data.message);
-                            alert(`Error: ${data.message}`);
-                        }
-                    };
-                    
-                    websocket.onerror = (error) => {
-                        console.error('WebSocket error:', error);
-                    };
-                    
-                    websocket.onclose = (event) => {
-                        console.log('WebSocket connection closed:', event.code, event.reason);
-                        if (retryCount < maxRetries) {
-                            retryCount++;
-                            console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
-                            setTimeout(connect, retryDelay);
-                        } else {
-                            console.error('Failed to connect to WebSocket server after multiple attempts');
-                            alert('Could not connect to the interpretation server. Please try refreshing the page.');
-                        }
-                    };
-                } catch (error) {
-                    console.error('Error creating WebSocket connection:', error);
-                    if (retryCount < maxRetries) {
-                        retryCount++;
-                        console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
-                        setTimeout(connect, retryDelay);
-                    }
-                }
-            }
-            
-            connect();
-        }
-
-        // Process video frames for sign language interpretation
-        function startVideoProcessing() {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            
-            function processFrame() {
-                if (!isProcessingFrame && websocket.readyState === WebSocket.OPEN) {
-                    isProcessingFrame = true;
-                    
-                    // Set canvas dimensions to match video
-                    canvas.width = localVideo.videoWidth;
-                    canvas.height = localVideo.videoHeight;
-                    
-                    // Draw current frame to canvas
-                    context.drawImage(localVideo, 0, 0, canvas.width, canvas.height);
-                    
-                    // Convert to base64 and send to server
-                    const frameData = canvas.toDataURL('image/jpeg', 0.8);
-                    websocket.send(JSON.stringify({
-                        type: 'video_frame',
-                        data: frameData
-                    }));
-                    
-                    isProcessingFrame = false;
-                }
-                
-                // Process next frame
-                requestAnimationFrame(processFrame);
-            }
-            
-            processFrame();
-        }
-
-        // Process audio for speech-to-text
-        function startAudioProcessing() {
-            const audioTrack = localStream.getAudioTracks()[0];
-            const audioStream = new MediaStream([audioTrack]);
-            
-            mediaRecorder = new MediaRecorder(audioStream);
-            
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-            
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                audioChunks = [];
-                
-                // Convert blob to base64
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64Audio = reader.result.split(',')[1];
-                    websocket.send(JSON.stringify({
-                        type: 'audio',
-                        data: base64Audio
-                    }));
-                };
-                reader.readAsDataURL(audioBlob);
-                
-                // Start new recording
-                mediaRecorder.start(1000);
-            };
-            
-            mediaRecorder.start(1000);
-        }
 
         // Handle role selection
         document.querySelectorAll('input[name="role"]').forEach(radio => {
@@ -293,92 +135,13 @@
             }
 
             try {
-                // Get local stream
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localVideo.srcObject = localStream;
+                callConnection = new CallConnection(db, auth, localVideo, remoteVideo, aiOutput);
+                await callConnection.initializeCall(userRole, targetUserId);
 
-                // Create peer connection
-                peerConnection = new RTCPeerConnection(servers);
-
-                // Add local tracks to peer connection
-                localStream.getTracks().forEach((track) => {
-                    peerConnection.addTrack(track, localStream);
-                });
-
-                // Handle remote stream
-                peerConnection.ontrack = (event) => {
-                    console.log('Received remote track:', event.track.kind);
-                    if (event.track.kind === 'video') {
-                        if (!remoteVideo.srcObject) {
-                            remoteVideo.srcObject = new MediaStream();
-                        }
-                        remoteVideo.srcObject.addTrack(event.track);
-                        console.log('Remote video track added');
-                    }
-                };
-
-                // Handle ICE candidates
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        // Serialize the ICE candidate before storing
-                        const serializedCandidate = {
-                            sdpMLineIndex: event.candidate.sdpMLineIndex,
-                            sdpMid: event.candidate.sdpMid,
-                            candidate: event.candidate.candidate
-                        };
-                        updateDoc(callDoc, {
-                            iceCandidates: arrayUnion(serializedCandidate)
-                        });
-                    }
-                };
-
-                // Create call document with role
-                const callsRef = collection(db, 'calls');
-                callDoc = await addDoc(callsRef, {
-                    initiator: auth.currentUser.uid,
-                    target: targetUserId,
-                    status: 'pending',
-                    initiatorRole: userRole
-                });
-                callId = callDoc.id;
-
-                // Update UI with role
-                roleIndicator.textContent = `Role: ${userRole === 'accessibility' ? 'Accessibility User' : 'Regular User'}`;
-
-                // Listen for remote ICE candidates
-                onSnapshot(doc(db, 'calls', callId), async (snapshot) => {
-                    const data = snapshot.data();
-                    if (data?.answer) {
-                        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    }
-                    if (data?.iceCandidates) {
-                        for (const candidate of data.iceCandidates) {
-                            try {
-                                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                            } catch (e) {
-                                console.warn('Error adding ICE candidate:', e);
-                            }
-                        }
-                    }
-                });
-
-                // Create and set local offer
-                const offerDescription = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offerDescription);
-
-                await updateDoc(callDoc, {
-                    offer: {
-                        type: offerDescription.type,
-                        sdp: offerDescription.sdp
-                    }
-                });
-
-                // Hide setup modal and show call container
+                // Update UI
                 setupModal.style.display = 'none';
                 callContainer.style.display = 'flex';
-
-                // Connect to WebSocket server for interpretations
-                connectWebSocket();
+                roleIndicator.textContent = `Role: ${userRole === 'accessibility' ? 'Accessibility User' : 'Regular User'}`;
 
             } catch (error) {
                 console.error('Error initializing call:', error);
@@ -391,34 +154,31 @@
 
         // Handle mute/unmute
         muteBtn.addEventListener('click', () => {
-            const audioTrack = localStream.getAudioTracks()[0];
-            audioTrack.enabled = !audioTrack.enabled;
-            muteBtn.classList.toggle('muted');
+            if (callConnection?.localStream) {
+                const audioTrack = callConnection.localStream.getAudioTracks()[0];
+                audioTrack.enabled = !audioTrack.enabled;
+                muteBtn.classList.toggle('muted');
+            }
         });
 
         // Handle video on/off
         videoBtn.addEventListener('click', () => {
-            const videoTrack = localStream.getVideoTracks()[0];
-            videoTrack.enabled = !videoTrack.enabled;
-            videoBtn.classList.toggle('video-off');
+            if (callConnection?.localStream) {
+                const videoTrack = callConnection.localStream.getVideoTracks()[0];
+                videoTrack.enabled = !videoTrack.enabled;
+                videoBtn.classList.toggle('video-off');
+            }
         });
 
         // Handle end call
         endCallBtn.addEventListener('click', async () => {
-            if (callId) {
-                await deleteDoc(doc(db, 'calls', callId));
+            if (callConnection) {
+                await callConnection.cleanup();
             }
-            if (websocket) {
-                websocket.close();
-            }
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            localStream?.getTracks().forEach(track => track.stop());
             window.location.href = '../home/home.html';
         });
 
-        // Check authentication and show setup modal
+        // Check authentication
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = '../login/login.html';
@@ -428,16 +188,9 @@
 
         // Handle page unload
         window.addEventListener('beforeunload', async () => {
-            if (callId) {
-                await deleteDoc(doc(db, 'calls', callId));
+            if (callConnection) {
+                await callConnection.cleanup();
             }
-            if (websocket) {
-                websocket.close();
-            }
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            localStream?.getTracks().forEach(track => track.stop());
         });
     </script>
 </body>
