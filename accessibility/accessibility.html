@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Language Recognition</title>
+    <link rel="icon" href="../assets/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="accessibility.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-logo">
+            <img src="../assets/logo.svg" alt="Logo">
+            <span>SignAI</span>
+        </div>
+        <div class="nav-links">
+            <button class="nav-button" onclick="window.location.href='home/home.html'">
+                <img src="../assets/back.svg" alt="Back">
+                Back to Home
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <div class="main-content">
+            <!-- Current Recognition Label (Left) -->
+            <div class="recognition-label current">
+                <h3>Current Recognition</h3>
+                <div class="content">
+                    <div id="recognizedText" class="recognized-text">Waiting for signs...</div>
+                </div>
+            </div>
+
+            <!-- Video Container (Center) -->
+            <div class="video-container">
+                <video id="localVideo" autoplay playsinline></video>
+            </div>
+
+            <!-- Accumulated Sentence Label (Right) -->
+            <div class="recognition-label">
+                <h3>Accumulated Sentence</h3>
+                <div class="content">
+                    <div id="sentenceText" class="sentence-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div class="control-buttons">
+                <button id="startRecognition" class="standard-button primary">
+                    Start Recognition
+                </button>
+                <button id="stopRecognition" class="standard-button secondary" disabled>
+                    Stop Recognition
+                </button>
+            </div>
+            <div id="statusText" class="status-text">Initializing...</div>
+        </div>
+    </div>
+
+    <!-- Error handling for Firebase -->
+    <script>
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Error: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo + '\nColumn: ' + columnNo + '\nError object: ' + JSON.stringify(error));
+            return false;
+        };
+    </script>
+
+    <!-- Initialize Firebase first -->
+    <script src="../firebase-config.js"></script>
+    <!-- Then load the application code -->
+    <script src="accessibility.js"></script>
+</body>
+</html> 

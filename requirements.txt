@@ -5,10 +5,12 @@ SpeechRecognition==3.10.0
 gTTS==2.3.2
 mediapipe==0.10.11
 protobuf>=3.11,<4.0.0
-scikit-learn>=1.2.0
+scikit-learn==1.2.0
 scipy>=1.9.0
 torch>=2.0.0
 torchvision>=0.15.0
+flask==3.0.2
+flask-cors==4.0.0
 
 # For Mac M1/M2 (Apple Silicon)
 --find-links https://download.pytorch.org/whl/torch_stable.html

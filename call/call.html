@@ -9,35 +9,31 @@
     <link rel="stylesheet" href="call.css">
 </head>
 <body>
-    <!-- Role Selection Modal -->
-    <div class="modal" id="roleModal">
-        <div class="modal-content">
-            <h2>Select Your Role</h2>
-            <div class="role-options">
-                <label class="role-option">
-                    <input type="radio" name="role" value="regular">
-                    <div class="role-details">
-                        <h3>Regular User</h3>
-                        <p>I don't need sign language interpretation</p>
-                    </div>
-                </label>
-                <label class="role-option">
-                    <input type="radio" name="role" value="accessibility">
-                    <div class="role-details">
-                        <h3>Accessibility User</h3>
-                        <p>I need sign language interpretation</p>
-                    </div>
-                </label>
-            </div>
-            <button id="startCallBtn" class="start-button" disabled>Start Call</button>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-logo">
+            <img src="../assets/logo.png" alt="SignAI Logo">
+            <span>SignAI</span>
         </div>
-    </div>
+        <div class="nav-links">
+            <button id="backBtn" class="nav-button" onclick="window.location.href='../home/home.html'">
+                <img src="../assets/back.svg" alt="Back">
+                Back to Home
+            </button>
+        </div>
+    </nav>
 
-    <!-- Main Call Interface (Initially Hidden) -->
-    <div class="container" style="display: none;">
+    <!-- Main Call Interface -->
+    <div class="container">
         <div class="video-grid">
             <div class="video-wrapper remote">
                 <video id="remoteVideo" autoplay playsinline></video>
+                <div class="connecting-overlay">
+                    <div class="connecting-text">
+                        <div class="dots-loading"></div>
+                        Connecting...
+                    </div>
+                </div>
                 <div class="user-label">Other Person</div>
             </div>
             <div class="video-wrapper local">
@@ -46,108 +42,55 @@
             </div>
         </div>
 
-        <div class="ai-output">
-            <div class="interpretation-text"></div>
-            <audio id="interpretationAudio" autoplay></audio>
-        </div>
-
         <div class="controls">
             <button id="endCall" class="control-button">End Call</button>
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-analytics.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
-        import CallConnection from './socket.js';
+    <script>
+        // Get DOM elements
+        const localVideo = document.getElementById('localVideo');
+        const endCallButton = document.getElementById('endCall');
+        let localStream = null;
 
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
-            authDomain: "signai-ea820.firebaseapp.com",
-            projectId: "signai-ea820",
-            storageBucket: "signai-ea820.firebasestorage.app",
-            messagingSenderId: "88913376198",
-            appId: "1:88913376198:web:bd13282673a2a8415fb8c7",
-            measurementId: "G-7W3MJTFNSR"
-        };
+        // Initialize video stream
+        async function initializeVideo() {
+            try {
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        let callConnection = null;
-
-        // Get target user ID from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const targetUserId = urlParams.get('targetId');
-
-        if (!targetUserId) {
-            alert('No target user selected. Redirecting to home page...');
-            window.location.href = '../home/home.html';
-            throw new Error('No target user ID provided');
+                // Display local video
+                localVideo.srcObject = localStream;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Failed to access camera. Please make sure you have granted camera permissions.');
+            }
         }
 
-        // Handle role selection
-        const roleModal = document.getElementById('roleModal');
-        const container = document.querySelector('.container');
-        const startCallBtn = document.getElementById('startCallBtn');
-        let selectedRole = null;
-
-        // Check authentication first
-        onAuthStateChanged(auth, (user) => {
-            if (!user) {
-                window.location.href = '../login/login.html';
-                return;
-            }
-            
-            // Only setup role selection after confirming authentication
-            document.querySelectorAll('input[name="role"]').forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    selectedRole = e.target.value;
-                    startCallBtn.disabled = false;
-                });
-            });
-
-            startCallBtn.addEventListener('click', async () => {
-                if (!selectedRole) return;
-                
-                roleModal.style.display = 'none';
-                container.style.display = 'flex';
-                
-                const localVideo = document.getElementById('localVideo');
-                const remoteVideo = document.getElementById('remoteVideo');
-                const aiOutput = document.querySelector('.ai-output');
-
-                try {
-                    callConnection = new CallConnection(db, auth, localVideo, remoteVideo, aiOutput);
-                    await callConnection.initializeCall(selectedRole, targetUserId);
-                } catch (error) {
-                    console.error('Failed to initialize call:', error);
-                    alert('Failed to initialize call. Please try again.');
-                    window.location.href = '../home/home.html';
-                }
-            });
-        });
-
-        // Handle end call button
-        document.getElementById('endCall').addEventListener('click', async () => {
-            if (callConnection) {
-                await callConnection.cleanup();
+        // Handle end call
+        endCallButton.addEventListener('click', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
             }
             window.location.href = '../home/home.html';
         });
 
         // Handle page unload
-        window.addEventListener('beforeunload', async () => {
-            if (callConnection) {
-                await callConnection.cleanup();
+        window.addEventListener('beforeunload', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
             }
         });
+
+        // Start video on page load
+        initializeVideo();
     </script>
 </body>
 </html> 

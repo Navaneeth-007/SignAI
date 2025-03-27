@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Head -->
+    <circle cx="12" cy="6" r="2.5" fill="currentColor"/>
+    <!-- Body -->
+    <path d="M19 13v-2h-2v2h2zm-2 0h-2v2h2v-2zm-2 2h-2v2h2v-2zm-2-2h-2v2h2v-2zm-2 2H9v2h2v-2zM9 13H7v2h2v-2zM7 13V11H5v2h2z" fill="currentColor"/>
+    <!-- Arms -->
+    <path d="M12 8c-3.866 0-7 3.134-7 7 0 3.866 3.134 7 7 7s7-3.134 7-7h-2c0 2.757-2.243 5-5 5s-5-2.243-5-5 2.243-5 5-5V8z" fill="currentColor"/>
+    <!-- Sign Language Hand -->
+    <path d="M14.5 11c-.83 0-1.5.67-1.5 1.5v2c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-2c0-.83-.67-1.5-1.5-1.5z" fill="currentColor"/>
+</svg> 
