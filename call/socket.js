@@ -1,8 +1,8 @@
-import { collection, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
 
 // Get WebSocket URL based on environment
 const WS_URL = window.location.hostname === 'localhost' 
-    ? 'ws://localhost:8765'
+    ? 'ws://localhost:10000'  // Updated to match the Python server port
     : `wss://${window.location.hostname.replace('signai-frontend', 'signai-websocket')}.onrender.com`;
 
 class CallConnection {
@@ -70,9 +70,24 @@ class CallConnection {
                 this.remoteStream.addTrack(event.track);
             };
 
+            // Handle ICE candidates
+            this.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('New ICE candidate:', event.candidate);
+                    this.sendWebSocketMessage({
+                        type: 'ice-candidate',
+                        candidate: event.candidate
+                    });
+                }
+            };
+
             // Handle connection state changes
             this.peerConnection.onconnectionstatechange = () => {
                 console.log('Peer connection state:', this.peerConnection.connectionState);
+                if (this.peerConnection.connectionState === 'failed') {
+                    console.log('Connection failed, cleaning up...');
+                    this.cleanup();
+                }
             };
 
             this.peerConnection.oniceconnectionstatechange = () => {
@@ -99,7 +114,7 @@ class CallConnection {
         const connect = () => {
             return new Promise((resolve, reject) => {
                 try {
-                    console.log('Attempting to connect to WebSocket server...');
+                    console.log('Attempting to connect to WebSocket server at:', WS_URL);
                     this.websocket = new WebSocket(WS_URL);
 
                     this.websocket.onopen = () => {
@@ -198,6 +213,7 @@ class CallConnection {
             });
         } catch (error) {
             console.error('Error creating offer:', error);
+            throw error;
         }
     }
 
@@ -212,6 +228,7 @@ class CallConnection {
             });
         } catch (error) {
             console.error('Error handling offer:', error);
+            throw error;
         }
     }
 
@@ -221,6 +238,7 @@ class CallConnection {
             await this.peerConnection.setRemoteDescription(answerDescription);
         } catch (error) {
             console.error('Error handling answer:', error);
+            throw error;
         }
     }
 
@@ -231,6 +249,7 @@ class CallConnection {
             }
         } catch (error) {
             console.error('Error handling ICE candidate:', error);
+            throw error;
         }
     }
 
