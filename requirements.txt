@@ -1,0 +1,21 @@
+websockets==12.0
+opencv-python==4.9.0.80
+numpy==1.23.5
+SpeechRecognition==3.10.1
+gTTS==2.5.1
+networkx>=3.0
+protobuf>=3.11,<4.0.0
+mediapipe==0.10.11
+scikit-learn>=1.2.0
+scipy>=1.9.0
+xgboost==2.0.3
+playsound==1.2.2
+
+# For Mac M1/M2 (Apple Silicon)
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch==2.2.1
+torchvision==0.17.1
+
+# TensorFlow for Mac (install separately)
+# tensorflow-macos==2.16.2
+# tensorflow-metal==1.1.0 

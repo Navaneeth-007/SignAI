@@ -8,11 +8,42 @@
     <link rel="stylesheet" href="call.css">
 </head>
 <body>
-    <div class="call-container">
+    <!-- Call Setup Modal -->
+    <div class="setup-modal" id="setupModal">
+        <div class="setup-content">
+            <h2>Call Setup</h2>
+            <p>Please select your role for this call:</p>
+            
+            <div class="role-selection">
+                <div class="role-option">
+                    <input type="radio" id="normalUser" name="role" value="normal">
+                    <label for="normalUser">
+                        <h3>Regular User</h3>
+                        <p>I don't need sign language interpretation</p>
+                    </label>
+                </div>
+
+                <div class="role-option">
+                    <input type="radio" id="accessibilityUser" name="role" value="accessibility">
+                    <label for="accessibilityUser">
+                        <h3>Accessibility User</h3>
+                        <p>I need sign language interpretation</p>
+                    </label>
+                </div>
+            </div>
+
+            <button id="startCallBtn" class="start-call-btn" disabled>Start Call</button>
+        </div>
+    </div>
+
+    <div class="call-container" style="display: none;">
         <nav class="call-nav">
             <div class="nav-logo">
                 <img src="../assets/logo.png" alt="SignAI Logo">
                 <span>SignAI Call</span>
+            </div>
+            <div class="call-info">
+                <span class="role-indicator"></span>
             </div>
             <button class="end-call-btn" onclick="window.location.href='../home/home.html'">End Call</button>
         </nav>
@@ -27,6 +58,11 @@
                     <video id="remoteVideo" autoplay playsinline></video>
                     <div class="video-label">Remote User</div>
                 </div>
+            </div>
+
+            <div id="aiOutput" class="ai-output">
+                <div class="interpretation-text"></div>
+                <audio id="interpretationAudio" autoplay></audio>
             </div>
 
             <div class="controls">
@@ -69,6 +105,11 @@
         let peerConnection;
         let callDoc;
         let callId;
+        let userRole;
+        let websocket;
+        let mediaRecorder;
+        let audioChunks = [];
+        let isProcessingFrame = false;
 
         const servers = {
             iceServers: [
@@ -79,11 +120,132 @@
         };
 
         // Get DOM elements
+        const setupModal = document.getElementById('setupModal');
+        const startCallBtn = document.getElementById('startCallBtn');
+        const callContainer = document.querySelector('.call-container');
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         const muteBtn = document.getElementById('muteBtn');
         const videoBtn = document.getElementById('videoBtn');
         const endCallBtn = document.getElementById('endCallBtn');
+        const roleIndicator = document.querySelector('.role-indicator');
+        const aiOutput = document.getElementById('aiOutput');
+        const interpretationText = aiOutput.querySelector('.interpretation-text');
+        const interpretationAudio = document.getElementById('interpretationAudio');
+
+        // Connect to WebSocket server
+        function connectWebSocket() {
+            websocket = new WebSocket('ws://localhost:8765');
+            
+            websocket.onopen = () => {
+                console.log('Connected to WebSocket server');
+                // Send initial role
+                websocket.send(JSON.stringify({ role: userRole }));
+                
+                // Start processing if accessibility user
+                if (userRole === 'accessibility') {
+                    startVideoProcessing();
+                } else {
+                    startAudioProcessing();
+                }
+            };
+            
+            websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'interpretation') {
+                    // Display text interpretation
+                    interpretationText.textContent = data.text;
+                    aiOutput.classList.add('active');
+                    
+                    // Play audio interpretation
+                    if (data.audio) {
+                        interpretationAudio.src = `data:audio/mp3;base64,${data.audio}`;
+                    }
+                }
+            };
+            
+            websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+            
+            websocket.onclose = () => {
+                console.log('Disconnected from WebSocket server');
+            };
+        }
+
+        // Process video frames for sign language interpretation
+        function startVideoProcessing() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            
+            function processFrame() {
+                if (!isProcessingFrame && websocket.readyState === WebSocket.OPEN) {
+                    isProcessingFrame = true;
+                    
+                    // Set canvas dimensions to match video
+                    canvas.width = localVideo.videoWidth;
+                    canvas.height = localVideo.videoHeight;
+                    
+                    // Draw current frame to canvas
+                    context.drawImage(localVideo, 0, 0, canvas.width, canvas.height);
+                    
+                    // Convert to base64 and send to server
+                    const frameData = canvas.toDataURL('image/jpeg', 0.8);
+                    websocket.send(JSON.stringify({
+                        type: 'video_frame',
+                        data: frameData
+                    }));
+                    
+                    isProcessingFrame = false;
+                }
+                
+                // Process next frame
+                requestAnimationFrame(processFrame);
+            }
+            
+            processFrame();
+        }
+
+        // Process audio for speech-to-text
+        function startAudioProcessing() {
+            const audioTrack = localStream.getAudioTracks()[0];
+            const audioStream = new MediaStream([audioTrack]);
+            
+            mediaRecorder = new MediaRecorder(audioStream);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                audioChunks = [];
+                
+                // Convert blob to base64
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64Audio = reader.result.split(',')[1];
+                    websocket.send(JSON.stringify({
+                        type: 'audio',
+                        data: base64Audio
+                    }));
+                };
+                reader.readAsDataURL(audioBlob);
+                
+                // Start new recording
+                mediaRecorder.start(1000);
+            };
+            
+            mediaRecorder.start(1000);
+        }
+
+        // Handle role selection
+        document.querySelectorAll('input[name="role"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                userRole = radio.value;
+                startCallBtn.disabled = false;
+            });
+        });
 
         // Initialize call
         async function initCall() {
@@ -112,14 +274,18 @@
                     remoteVideo.srcObject = event.streams[0];
                 };
 
-                // Create call document
+                // Create call document with role
                 const callsRef = collection(db, 'calls');
                 callDoc = await addDoc(callsRef, {
                     initiator: auth.currentUser.uid,
                     target: targetUserId,
-                    status: 'pending'
+                    status: 'pending',
+                    initiatorRole: userRole
                 });
                 callId = callDoc.id;
+
+                // Update UI with role
+                roleIndicator.textContent = `Role: ${userRole === 'accessibility' ? 'Accessibility User' : 'Regular User'}`;
 
                 // Listen for remote answer
                 onSnapshot(doc(db, 'calls', callId), async (snapshot) => {
@@ -140,11 +306,21 @@
                     }
                 });
 
+                // Hide setup modal and show call container
+                setupModal.style.display = 'none';
+                callContainer.style.display = 'flex';
+
+                // Connect to WebSocket server for interpretations
+                connectWebSocket();
+
             } catch (error) {
                 console.error('Error initializing call:', error);
                 alert('Error starting call. Please try again.');
             }
         }
+
+        // Start call button handler
+        startCallBtn.addEventListener('click', initCall);
 
         // Handle mute/unmute
         muteBtn.addEventListener('click', () => {
@@ -165,23 +341,34 @@
             if (callId) {
                 await deleteDoc(doc(db, 'calls', callId));
             }
+            if (websocket) {
+                websocket.close();
+            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
             localStream?.getTracks().forEach(track => track.stop());
             window.location.href = '../home/home.html';
         });
 
-        // Check authentication and initialize call
+        // Check authentication and show setup modal
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = '../login/login.html';
                 return;
             }
-            initCall();
         });
 
         // Handle page unload
         window.addEventListener('beforeunload', async () => {
             if (callId) {
                 await deleteDoc(doc(db, 'calls', callId));
+            }
+            if (websocket) {
+                websocket.close();
+            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
             }
             localStream?.getTracks().forEach(track => track.stop());
         });
