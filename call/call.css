@@ -107,10 +107,10 @@ body {
     padding: 20px;
 }
 
+/* Updated Video Grid */
 .video-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 200px;
+    display: flex;
+    justify-content: center;
     gap: 20px;
     height: calc(100vh - 160px);
     margin-bottom: 20px;
@@ -121,17 +121,12 @@ body {
     background-color: #2a2a2a;
     border-radius: 12px;
     overflow: hidden;
+    width: calc(50% - 10px); /* Half width minus half of the gap */
+    max-width: 600px; /* Maximum width for larger screens */
+    aspect-ratio: 1; /* Make it square */
 }
 
-.video-wrapper.remote {
-    grid-row: 1;
-}
-
-.video-wrapper.local {
-    grid-row: 2;
-}
-
-video {
+.video-wrapper video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -193,7 +188,32 @@ video {
     background-color: #c82333;
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    .video-grid {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .video-wrapper {
+        width: 100%;
+        max-width: none;
+        aspect-ratio: 1;
+    }
+
+    .user-label {
+        font-size: 12px;
+    }
+
+    .control-button {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+
     .modal-content {
         padding: 20px;
         width: 95%;
@@ -209,27 +229,5 @@ video {
 
     .role-details p {
         font-size: 13px;
-    }
-
-    .container {
-        padding: 10px;
-    }
-
-    .video-grid {
-        gap: 10px;
-        height: calc(100vh - 140px);
-    }
-
-    .video-wrapper.local {
-        height: 150px;
-    }
-
-    .user-label {
-        font-size: 12px;
-    }
-
-    .control-button {
-        padding: 10px 20px;
-        font-size: 14px;
     }
 } 
