@@ -9,189 +9,131 @@
     <link rel="stylesheet" href="call.css">
 </head>
 <body>
-    <!-- Call Setup Modal -->
-    <div class="setup-modal" id="setupModal">
-        <div class="setup-content">
-            <h2>Call Setup</h2>
-            <p>Please select your role for this call:</p>
-            
-            <div class="role-selection">
-                <div class="role-option">
-                    <input type="radio" id="normalUser" name="role" value="normal">
-                    <label for="normalUser">
+    <!-- Role Selection Modal -->
+    <div class="modal" id="roleModal">
+        <div class="modal-content">
+            <h2>Select Your Role</h2>
+            <div class="role-options">
+                <label class="role-option">
+                    <input type="radio" name="role" value="regular">
+                    <div class="role-details">
                         <h3>Regular User</h3>
                         <p>I don't need sign language interpretation</p>
-                    </label>
-                </div>
-
-                <div class="role-option">
-                    <input type="radio" id="accessibilityUser" name="role" value="accessibility">
-                    <label for="accessibilityUser">
+                    </div>
+                </label>
+                <label class="role-option">
+                    <input type="radio" name="role" value="accessibility">
+                    <div class="role-details">
                         <h3>Accessibility User</h3>
                         <p>I need sign language interpretation</p>
-                    </label>
-                </div>
+                    </div>
+                </label>
             </div>
-
-            <button id="startCallBtn" class="start-call-btn" disabled>Start Call</button>
+            <button id="startCallBtn" class="start-button" disabled>Start Call</button>
         </div>
     </div>
 
-    <div class="call-container" style="display: none;">
-        <nav class="call-nav">
-            <div class="nav-logo">
-                <img src="../assets/logo.png" alt="SignAI Logo">
-                <span>SignAI Call</span>
+    <!-- Main Call Interface (Initially Hidden) -->
+    <div class="container" style="display: none;">
+        <div class="video-grid">
+            <div class="video-wrapper remote">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <div class="user-label">Other Person</div>
             </div>
-            <div class="call-info">
-                <span class="role-indicator"></span>
+            <div class="video-wrapper local">
+                <video id="localVideo" autoplay playsinline muted></video>
+                <div class="user-label">You</div>
             </div>
-            <button class="end-call-btn" onclick="window.location.href='../home/home.html'">End Call</button>
-        </nav>
+        </div>
 
-        <div class="video-container">
-            <div class="video-grid">
-                <div class="video-wrapper local-video">
-                    <video id="localVideo" autoplay playsinline muted></video>
-                    <div class="video-label">You</div>
-                </div>
-                <div class="video-wrapper remote-video">
-                    <video id="remoteVideo" autoplay playsinline></video>
-                    <div class="video-label">Remote User</div>
-                </div>
-            </div>
+        <div class="ai-output">
+            <div class="interpretation-text"></div>
+            <audio id="interpretationAudio" autoplay></audio>
+        </div>
 
-            <div id="aiOutput" class="ai-output">
-                <div class="interpretation-text"></div>
-                <audio id="interpretationAudio" autoplay></audio>
-            </div>
-
-            <div class="controls">
-                <button id="muteBtn" class="control-btn">
-                    <img src="../assets/mic.svg" alt="Mute" id="muteIcon">
-                </button>
-                <button id="videoBtn" class="control-btn">
-                    <img src="../assets/video.svg" alt="Video" id="videoIcon">
-                </button>
-                <button id="endCallBtn" class="control-btn end">
-                    <img src="../assets/end-call.svg" alt="End Call">
-                </button>
-            </div>
+        <div class="controls">
+            <button id="endCall" class="control-button">End Call</button>
         </div>
     </div>
 
-    <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { 
-            getFirestore, 
-            collection, 
-            addDoc, 
-            onSnapshot, 
-            doc, 
-            updateDoc, 
-            deleteDoc 
-        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import CallConnection from './socket.js';
 
+        // Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
-            authDomain: "signai-ea820.firebaseapp.com",
-            projectId: "signai-ea820",
-            storageBucket: "signai-ea820.firebasestorage.app",
-            messagingSenderId: "88913376198",
-            appId: "1:88913376198:web:bd13282673a2a8415fb8c7",
-            measurementId: "G-7W3MJTFNSR"
+            apiKey: "AIzaSyDm9QP8ICqZtGqwnx4lhHGLR5aBE0R2TaE",
+            authDomain: "signai-7bba1.firebaseapp.com",
+            projectId: "signai-7bba1",
+            storageBucket: "signai-7bba1.appspot.com",
+            messagingSenderId: "1020927326978",
+            appId: "1:1020927326978:web:c7e2a3c7fe8df470f3d6f0"
         };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
         let callConnection = null;
-        let userRole = null;
 
-        // Get DOM elements
-        const setupModal = document.getElementById('setupModal');
-        const startCallBtn = document.getElementById('startCallBtn');
-        const callContainer = document.querySelector('.call-container');
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const muteBtn = document.getElementById('muteBtn');
-        const videoBtn = document.getElementById('videoBtn');
-        const endCallBtn = document.getElementById('endCallBtn');
-        const roleIndicator = document.querySelector('.role-indicator');
-        const aiOutput = document.getElementById('aiOutput');
+        // Get target user ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUserId = urlParams.get('targetId');
+
+        if (!targetUserId) {
+            alert('No target user selected. Redirecting to home page...');
+            window.location.href = '/';
+        }
 
         // Handle role selection
+        const roleModal = document.getElementById('roleModal');
+        const container = document.querySelector('.container');
+        const startCallBtn = document.getElementById('startCallBtn');
+        let selectedRole = null;
+
         document.querySelectorAll('input[name="role"]').forEach(radio => {
-            radio.addEventListener('change', () => {
-                userRole = radio.value;
+            radio.addEventListener('change', (e) => {
+                selectedRole = e.target.value;
                 startCallBtn.disabled = false;
             });
         });
 
-        // Initialize call
-        async function initCall() {
-            const targetUserId = sessionStorage.getItem('callUserId');
-            if (!targetUserId) {
-                alert('No user selected for call');
-                window.location.href = '../home/home.html';
-                return;
-            }
+        startCallBtn.addEventListener('click', async () => {
+            if (!selectedRole) return;
+            
+            roleModal.style.display = 'none';
+            container.style.display = 'flex';
+            
+            const localVideo = document.getElementById('localVideo');
+            const remoteVideo = document.getElementById('remoteVideo');
+            const aiOutput = document.querySelector('.ai-output');
 
             try {
                 callConnection = new CallConnection(db, auth, localVideo, remoteVideo, aiOutput);
-                await callConnection.initializeCall(userRole, targetUserId);
-
-                // Update UI
-                setupModal.style.display = 'none';
-                callContainer.style.display = 'flex';
-                roleIndicator.textContent = `Role: ${userRole === 'accessibility' ? 'Accessibility User' : 'Regular User'}`;
-
+                await callConnection.initializeCall(selectedRole, targetUserId);
             } catch (error) {
-                console.error('Error initializing call:', error);
-                alert('Error starting call. Please try again.');
+                console.error('Failed to initialize call:', error);
+                alert('Failed to initialize call. Please try again.');
+                window.location.href = '/';
             }
-        }
-
-        // Start call button handler
-        startCallBtn.addEventListener('click', initCall);
-
-        // Handle mute/unmute
-        muteBtn.addEventListener('click', () => {
-            if (callConnection?.localStream) {
-                const audioTrack = callConnection.localStream.getAudioTracks()[0];
-                audioTrack.enabled = !audioTrack.enabled;
-                muteBtn.classList.toggle('muted');
-            }
-        });
-
-        // Handle video on/off
-        videoBtn.addEventListener('click', () => {
-            if (callConnection?.localStream) {
-                const videoTrack = callConnection.localStream.getVideoTracks()[0];
-                videoTrack.enabled = !videoTrack.enabled;
-                videoBtn.classList.toggle('video-off');
-            }
-        });
-
-        // Handle end call
-        endCallBtn.addEventListener('click', async () => {
-            if (callConnection) {
-                await callConnection.cleanup();
-            }
-            window.location.href = '../home/home.html';
         });
 
         // Check authentication
         onAuthStateChanged(auth, (user) => {
             if (!user) {
-                window.location.href = '../login/login.html';
-                return;
+                window.location.href = '/login.html';
             }
+        });
+
+        // Handle end call button
+        document.getElementById('endCall').addEventListener('click', async () => {
+            if (callConnection) {
+                await callConnection.cleanup();
+            }
+            window.location.href = '/';
         });
 
         // Handle page unload

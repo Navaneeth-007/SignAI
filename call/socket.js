@@ -19,10 +19,8 @@ class CallConnection {
         this.remoteStream = null;
         this.peerConnection = null;
         this.websocket = null;
-        this.callDoc = null;
-        this.callId = null;
         this.userRole = null;
-        this.roomId = null;
+        this.targetUserId = null;
 
         // WebRTC configuration
         this.servers = {
@@ -40,8 +38,7 @@ class CallConnection {
 
     async initializeCall(userRole, targetUserId) {
         this.userRole = userRole;
-        this.roomId = `${this.auth.currentUser.uid}_${targetUserId}`.split('').sort().join('');
-        console.log(`Initializing call as ${userRole} in room ${this.roomId}`);
+        this.targetUserId = targetUserId;
         
         try {
             // Get local stream
@@ -49,9 +46,6 @@ class CallConnection {
             this.localStream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: true
-            }).catch(error => {
-                console.error('Media permission error:', error.name, error.message);
-                throw new Error(`Failed to get camera/microphone access: ${error.message}`);
             });
             
             console.log('Media permissions granted, setting up local video');
@@ -62,9 +56,7 @@ class CallConnection {
             this.peerConnection = new RTCPeerConnection(this.servers);
             
             // Add local tracks to peer connection
-            console.log('Adding local tracks to peer connection...');
             this.localStream.getTracks().forEach((track) => {
-                console.log(`Adding ${track.kind} track to peer connection`);
                 this.peerConnection.addTrack(track, this.localStream);
             });
 
@@ -72,11 +64,9 @@ class CallConnection {
             this.peerConnection.ontrack = (event) => {
                 console.log('Received remote track:', event.track.kind);
                 if (!this.remoteStream) {
-                    console.log('Creating new remote stream');
                     this.remoteStream = new MediaStream();
                     this.remoteVideo.srcObject = this.remoteStream;
                 }
-                console.log('Adding track to remote stream');
                 this.remoteStream.addTrack(event.track);
             };
 
@@ -89,18 +79,7 @@ class CallConnection {
                 console.log('ICE connection state:', this.peerConnection.iceConnectionState);
             };
 
-            // Handle ICE candidates
-            this.peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    console.log('New ICE candidate:', event.candidate.type);
-                    this.sendWebSocketMessage({
-                        type: 'ice-candidate',
-                        candidate: event.candidate
-                    });
-                }
-            };
-
-            // Connect to WebSocket server and join room
+            // Connect to WebSocket server
             console.log('Connecting to WebSocket server...');
             await this.connectWebSocket();
 
@@ -108,7 +87,7 @@ class CallConnection {
         } catch (error) {
             console.error('Error initializing call:', error);
             await this.cleanup();
-            throw new Error(`Call initialization failed: ${error.message}`);
+            throw error;
         }
     }
 
@@ -124,11 +103,13 @@ class CallConnection {
                     this.websocket = new WebSocket(WS_URL);
 
                     this.websocket.onopen = () => {
-                        console.log('Connected to WebSocket server, joining room:', this.roomId);
-                        // Join room
+                        console.log('Connected to WebSocket server');
+                        // Join call with user IDs to create a unique call ID
+                        const callId = [this.auth.currentUser.uid, this.targetUserId].sort().join('_');
                         this.sendWebSocketMessage({
                             type: 'join',
-                            roomId: this.roomId,
+                            userId: this.auth.currentUser.uid,
+                            callId: callId,
                             role: this.userRole
                         });
                         resolve();
@@ -140,9 +121,8 @@ class CallConnection {
 
                         switch (data.type) {
                             case 'connected':
-                                console.log(`Connected to room as ${data.role}`);
-                                if (data.clients === 2) {
-                                    // Create and send offer if we're the second client
+                                console.log(`Connected to call as ${data.role}`);
+                                if (data.isCallReady) {
                                     await this.createAndSendOffer();
                                 }
                                 break;
@@ -158,7 +138,7 @@ class CallConnection {
                                 break;
 
                             case 'offer':
-                                console.log('Received offer, creating answer');
+                                console.log('Received offer');
                                 await this.handleOffer(data);
                                 break;
 
@@ -170,6 +150,10 @@ class CallConnection {
                             case 'ice-candidate':
                                 console.log('Received ICE candidate');
                                 await this.handleIceCandidate(data);
+                                break;
+
+                            case 'interpretation':
+                                this.handleInterpretation(data);
                                 break;
 
                             case 'error':
@@ -184,18 +168,17 @@ class CallConnection {
                         reject(error);
                     };
 
-                    this.websocket.onclose = async (event) => {
-                        console.log('WebSocket connection closed:', event.code, event.reason);
+                    this.websocket.onclose = () => {
+                        console.log('WebSocket connection closed');
                         if (retryCount < maxRetries) {
                             retryCount++;
                             console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
-                            setTimeout(() => {
-                                connect().catch(reject);
-                            }, retryDelay);
+                            setTimeout(() => connect().catch(reject), retryDelay);
                         } else {
-                            reject(new Error('Failed to connect to WebSocket server after multiple attempts'));
+                            reject(new Error('Failed to connect after multiple attempts'));
                         }
                     };
+
                 } catch (error) {
                     reject(error);
                 }
@@ -234,7 +217,8 @@ class CallConnection {
 
     async handleAnswer(data) {
         try {
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answerDescription = new RTCSessionDescription(data.sdp);
+            await this.peerConnection.setRemoteDescription(answerDescription);
         } catch (error) {
             console.error('Error handling answer:', error);
         }
@@ -250,6 +234,14 @@ class CallConnection {
         }
     }
 
+    handleInterpretation(data) {
+        this.interpretationText.textContent = data.text;
+        this.aiOutput.classList.add('active');
+        if (data.audio) {
+            this.interpretationAudio.src = `data:audio/mp3;base64,${data.audio}`;
+        }
+    }
+
     sendWebSocketMessage(message) {
         if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
             this.websocket.send(JSON.stringify(message));
@@ -258,80 +250,9 @@ class CallConnection {
         }
     }
 
-    startVideoProcessing() {
-        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
-            console.error('WebSocket not connected');
-            return;
-        }
-
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        let isProcessingFrame = false;
-
-        const processFrame = () => {
-            if (!isProcessingFrame && this.websocket.readyState === WebSocket.OPEN) {
-                isProcessingFrame = true;
-
-                canvas.width = this.localVideo.videoWidth;
-                canvas.height = this.localVideo.videoHeight;
-                context.drawImage(this.localVideo, 0, 0, canvas.width, canvas.height);
-
-                const frameData = canvas.toDataURL('image/jpeg', 0.8);
-                this.sendWebSocketMessage({
-                    type: 'video_frame',
-                    data: frameData
-                });
-
-                isProcessingFrame = false;
-            }
-            requestAnimationFrame(processFrame);
-        };
-
-        processFrame();
-    }
-
-    startAudioProcessing() {
-        if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
-            console.error('WebSocket not connected');
-            return;
-        }
-
-        const audioTrack = this.localStream.getAudioTracks()[0];
-        const audioStream = new MediaStream([audioTrack]);
-        const mediaRecorder = new MediaRecorder(audioStream);
-        let audioChunks = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-            audioChunks.push(event.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            audioChunks = [];
-
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64Audio = reader.result.split(',')[1];
-                this.sendWebSocketMessage({
-                    type: 'audio',
-                    data: base64Audio
-                });
-            };
-            reader.readAsDataURL(audioBlob);
-
-            mediaRecorder.start(1000);
-        };
-
-        mediaRecorder.start(1000);
-        this.mediaRecorder = mediaRecorder;
-    }
-
     async cleanup() {
         if (this.websocket) {
             this.websocket.close();
-        }
-        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-            this.mediaRecorder.stop();
         }
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => track.stop());

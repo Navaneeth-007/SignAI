@@ -1,12 +1,3 @@
-:root {
-    --primary-color: #4CAF50;
-    --secondary-color: #2196F3;
-    --background-color: #f5f5f5;
-    --text-color: #333;
-    --danger-color: #f44336;
-    --border-radius: 8px;
-}
-
 * {
     margin: 0;
     padding: 0;
@@ -14,295 +5,231 @@
 }
 
 body {
-    font-family: 'Poppins', sans-serif;
-    background-color: var(--background-color);
-    color: var(--text-color);
-    min-height: 100vh;
-}
-
-.call-container {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Navigation Styles */
-.call-nav {
-    background-color: white;
-    padding: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.nav-logo {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nav-logo img {
-    height: 30px;
-}
-
-.call-info {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.9rem;
-    color: #666;
-}
-
-/* Video Container Styles */
-.video-container {
-    flex: 1;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.video-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1rem;
-    flex: 1;
-    width: 100%;
-    height: 100%;
-    padding: 1rem;
-}
-
-.video-wrapper {
-    position: relative;
-    background-color: #000;
-    border-radius: var(--border-radius);
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-    min-height: 300px;
-}
-
-.video-wrapper video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-/* Remove the mirroring effect */
-/* .local-video {
-    transform: scaleX(-1);
-} */
-
-.remote-video {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     background-color: #1a1a1a;
+    color: #ffffff;
+    height: 100vh;
+    overflow: hidden;
 }
 
-.video-label {
-    position: absolute;
-    bottom: 1rem;
-    left: 1rem;
-    color: white;
-    background-color: rgba(0, 0, 0, 0.5);
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    z-index: 1;
-}
-
-.ai-output {
-    background-color: white;
-    padding: 1rem;
-    border-radius: var(--border-radius);
-    margin-top: 1rem;
-    max-height: 150px;
-    overflow-y: auto;
-    display: none;
-}
-
-.ai-output.active {
-    display: block;
-}
-
-/* Controls Styles */
-.controls {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    padding: 1rem;
-}
-
-.control-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: none;
-    background-color: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-}
-
-.control-btn img {
-    width: 24px;
-    height: 24px;
-}
-
-.control-btn:hover {
-    transform: scale(1.1);
-}
-
-.control-btn.muted {
-    background-color: #f44336;
-}
-
-.control-btn.video-off {
-    background-color: #f44336;
-}
-
-.control-btn.end {
-    background-color: var(--danger-color);
-}
-
-.control-btn.end:hover {
-    background-color: #d32f2f;
-}
-
-/* End Call Button */
-.end-call-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--danger-color);
-    color: white;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.end-call-btn:hover {
-    background-color: #d32f2f;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .video-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .video-wrapper {
-        height: 40vh;
-    }
-
-    .controls {
-        padding: 0.5rem;
-    }
-
-    .control-btn {
-        width: 40px;
-        height: 40px;
-    }
-
-    .control-btn img {
-        width: 20px;
-        height: 20px;
-    }
-}
-
-/* Setup Modal */
-.setup-modal {
+/* Role Selection Modal */
+.modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.8);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
 }
 
-.setup-content {
-    background-color: white;
-    padding: 2rem;
-    border-radius: var(--border-radius);
+.modal-content {
+    background-color: #2a2a2a;
+    border-radius: 12px;
+    padding: 30px;
     width: 90%;
     max-width: 500px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.setup-content h2 {
-    color: var(--text-color);
-    margin-bottom: 1rem;
+.modal-content h2 {
     text-align: center;
+    margin-bottom: 20px;
+    color: #ffffff;
+    font-size: 24px;
 }
 
-.role-selection {
-    margin: 2rem 0;
+.role-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
 }
 
 .role-option {
-    margin-bottom: 1rem;
-    padding: 1rem;
-    border: 2px solid #ddd;
-    border-radius: var(--border-radius);
+    display: flex;
+    align-items: flex-start;
+    padding: 15px;
+    border: 2px solid #3a3a3a;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease;
 }
 
 .role-option:hover {
-    border-color: var(--primary-color);
+    border-color: #4CAF50;
 }
 
 .role-option input[type="radio"] {
-    display: none;
+    margin-right: 15px;
+    margin-top: 4px;
 }
 
-.role-option input[type="radio"]:checked + label {
-    color: var(--primary-color);
+.role-details h3 {
+    margin-bottom: 5px;
+    color: #ffffff;
+    font-size: 18px;
 }
 
-.role-option input[type="radio"]:checked + label h3 {
-    color: var(--primary-color);
+.role-details p {
+    color: #aaaaaa;
+    font-size: 14px;
 }
 
-.role-option label {
-    display: block;
-    cursor: pointer;
-}
-
-.role-option h3 {
-    margin: 0 0 0.5rem 0;
-    color: var(--text-color);
-}
-
-.role-option p {
-    margin: 0;
-    color: #666;
-    font-size: 0.9rem;
-}
-
-.start-call-btn {
+.start-button {
     width: 100%;
-    padding: 1rem;
-    background-color: var(--primary-color);
+    padding: 12px;
+    background-color: #4CAF50;
     color: white;
     border: none;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-    font-weight: 600;
+    border-radius: 8px;
+    font-size: 16px;
     cursor: pointer;
     transition: background-color 0.3s ease;
 }
 
-.start-call-btn:disabled {
-    background-color: #ccc;
+.start-button:hover:not(:disabled) {
+    background-color: #45a049;
+}
+
+.start-button:disabled {
+    background-color: #666666;
     cursor: not-allowed;
 }
 
-.start-call-btn:not(:disabled):hover {
-    background-color: #45a049;
+/* Main Container */
+.container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.video-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 200px;
+    gap: 20px;
+    height: calc(100vh - 160px);
+    margin-bottom: 20px;
+}
+
+.video-wrapper {
+    position: relative;
+    background-color: #2a2a2a;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.video-wrapper.remote {
+    grid-row: 1;
+}
+
+.video-wrapper.local {
+    grid-row: 2;
+}
+
+video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background-color: #2a2a2a;
+}
+
+.user-label {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.ai-output {
+    background-color: #2a2a2a;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.ai-output.active {
+    opacity: 1;
+}
+
+.interpretation-text {
+    font-size: 16px;
+    color: #ffffff;
+    text-align: center;
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    padding: 10px;
+}
+
+.control-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.control-button:hover {
+    background-color: #c82333;
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        padding: 20px;
+        width: 95%;
+    }
+
+    .role-option {
+        padding: 12px;
+    }
+
+    .role-details h3 {
+        font-size: 16px;
+    }
+
+    .role-details p {
+        font-size: 13px;
+    }
+
+    .container {
+        padding: 10px;
+    }
+
+    .video-grid {
+        gap: 10px;
+        height: calc(100vh - 140px);
+    }
+
+    .video-wrapper.local {
+        height: 150px;
+    }
+
+    .user-label {
+        font-size: 12px;
+    }
+
+    .control-button {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
 } 

@@ -11,8 +11,6 @@ from datetime import datetime
 import speech_recognition as sr
 from gtts import gTTS
 import tempfile
-import threading
-import queue
 import logging
 
 # Add the model directory to Python path
@@ -40,124 +38,33 @@ logger = logging.getLogger(__name__)
 # Get port from environment variable (for Render)
 PORT = int(os.environ.get("PORT", "10000"))
 
-class CallRoom:
-    def __init__(self, room_id):
-        self.room_id = room_id
-        self.clients = {}  # {websocket: {'role': role}}
-        self.max_clients = 2
+class CallConnection:
+    def __init__(self, call_id):
+        self.call_id = call_id
+        self.users = {}  # {user_id: {websocket, role}}
+        self.interpreter = SignLanguageInterpreter()
+        self.recognizer = sr.Recognizer()
 
-    def is_full(self):
-        return len(self.clients) >= self.max_clients
-
-    def add_client(self, websocket, role):
-        if not self.is_full():
-            self.clients[websocket] = {'role': role}
+    def add_user(self, user_id, websocket, role):
+        if len(self.users) < 2:
+            self.users[user_id] = {"websocket": websocket, "role": role}
             return True
         return False
 
-    def remove_client(self, websocket):
-        if websocket in self.clients:
-            del self.clients[websocket]
+    def remove_user(self, user_id):
+        if user_id in self.users:
+            del self.users[user_id]
 
-    def get_other_client(self, websocket):
-        for client in self.clients:
-            if client != websocket:
-                return client
-        return None
+    def get_other_user(self, user_id):
+        for uid, data in self.users.items():
+            if uid != user_id:
+                return uid, data
+        return None, None
 
-class SignalServer:
-    def __init__(self):
-        self.rooms = {}  # {room_id: CallRoom}
-
-    def create_or_join_room(self, room_id, websocket, role):
-        if room_id not in self.rooms:
-            self.rooms[room_id] = CallRoom(room_id)
-        
-        room = self.rooms[room_id]
-        if room.add_client(websocket, role):
-            return room
-        return None
-
-    def remove_client(self, websocket):
-        for room in list(self.rooms.values()):
-            if websocket in room.clients:
-                room.remove_client(websocket)
-                if len(room.clients) == 0:
-                    del self.rooms[room.room_id]
-                return room
-        return None
-
-signal_server = SignalServer()
-
-class SignAIServer:
-    def __init__(self):
-        try:
-            self.interpreter = SignLanguageInterpreter()
-            self.recognizer = sr.Recognizer()
-            self.clients = {}  # Store client websocket connections and their roles
-            self.pairs = {}  # Store paired users
-            logging.info("SignAI Server initialized successfully")
-        except Exception as e:
-            logging.error(f"Error initializing SignAI Server: {e}")
-            raise
-
-    async def register(self, websocket, role):
-        """Register a new client connection and attempt pairing"""
-        self.clients[websocket] = {"role": role, "partner": None, "connected_at": datetime.now().isoformat()}
-        logging.info(f"New client registered with role: {role}")
-
-        # Attempt to pair the user
-        await self.pair_users()
-
-    async def unregister(self, websocket):
-        """Unregister a client connection and clean up pairing"""
-        if websocket in self.clients:
-            partner = self.clients[websocket]["partner"]
-            if partner:
-                # Notify the partner that the user has disconnected
-                await partner.send(json.dumps({
-                    'type': 'error',
-                    'message': 'Your partner has disconnected.'
-                }))
-                self.clients[partner]["partner"] = None
-
-            # Remove the client and clean up pairing
-            del self.clients[websocket]
-            logging.info(f"Client unregistered")
-
-    async def pair_users(self):
-        """Pair users based on their roles"""
-        normal_user = None
-        accessibility_user = None
-
-        # Find unpaired users
-        for websocket, info in self.clients.items():
-            if info["partner"] is None:
-                if info["role"] == "normal" and normal_user is None:
-                    normal_user = websocket
-                elif info["role"] == "accessibility" and accessibility_user is None:
-                    accessibility_user = websocket
-
-        # Pair the users if both roles are available
-        if normal_user and accessibility_user:
-            self.clients[normal_user]["partner"] = accessibility_user
-            self.clients[accessibility_user]["partner"] = normal_user
-
-            # Notify both users about the pairing
-            await normal_user.send(json.dumps({
-                'type': 'connection_status',
-                'status': 'paired',
-                'message': 'You are now connected to an accessibility user.'
-            }))
-            await accessibility_user.send(json.dumps({
-                'type': 'connection_status',
-                'status': 'paired',
-                'message': 'You are now connected to a normal user.'
-            }))
-            logging.info("Users paired successfully")
+    def is_full(self):
+        return len(self.users) >= 2
 
     def process_video_frame(self, frame_data):
-        """Process video frame and return sign language interpretation"""
         try:
             # Decode base64 image
             img_bytes = base64.b64decode(frame_data.split(',')[1])
@@ -167,29 +74,13 @@ class SignAIServer:
             # Get prediction from the model
             prediction = self.interpreter.predict(frame)
             if prediction:
-                logging.info(f"Prediction made: {prediction}")
+                logger.info(f"Prediction made: {prediction}")
             return prediction
         except Exception as e:
-            logging.error(f"Error processing video frame: {e}")
-            return None
-
-    def text_to_speech(self, text):
-        """Convert text to speech and return audio data"""
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as fp:
-                tts = gTTS(text=text, lang='en')
-                tts.save(fp.name)
-                with open(fp.name, 'rb') as audio_file:
-                    audio_data = audio_file.read()
-                os.unlink(fp.name)
-            logging.info(f"Text converted to speech: {text}")
-            return base64.b64encode(audio_data).decode('utf-8')
-        except Exception as e:
-            logging.error(f"Error converting text to speech: {e}")
+            logger.error(f"Error processing video frame: {e}")
             return None
 
     def process_audio(self, audio_data):
-        """Process audio and return transcribed text"""
         try:
             # Convert base64 audio to wav
             audio_bytes = base64.b64decode(audio_data)
@@ -202,92 +93,56 @@ class SignAIServer:
                     text = self.recognizer.recognize_google(audio)
                 
             os.unlink(fp.name)
-            logging.info(f"Audio processed to text: {text}")
+            logger.info(f"Audio processed to text: {text}")
             return text
         except Exception as e:
-            logging.error(f"Error processing audio: {e}")
+            logger.error(f"Error processing audio: {e}")
             return None
 
-    async def handle_client(self, websocket, path):
-        """Handle client connection and messages"""
+    def text_to_speech(self, text):
         try:
-            logger.info(f"New client connected from {websocket.remote_address}")
-
-            # Wait for initial role message
-            message = await websocket.recv()
-            data = json.loads(message)
-            client_role = data.get('role')
-
-            if not client_role:
-                logger.error("No role specified in initial message")
-                await websocket.send(json.dumps({
-                    'type': 'error',
-                    'message': 'No role specified'
-                }))
-                return
-
-            await self.register(websocket, client_role)
-
-            async for message in websocket:
-                try:
-                    data = json.loads(message)
-                    logger.info(f"Received {data['type']} message from {client_role} user")
-
-                    partner = self.clients[websocket]["partner"]
-                    if not partner:
-                        await websocket.send(json.dumps({
-                            'type': 'error',
-                            'message': 'No partner connected.'
-                        }))
-                        continue
-
-                    message_type = data.get('type')
-
-                    if message_type == 'video_frame' and client_role == 'accessibility':
-                        frame_data = data.get('data')
-                        prediction = self.process_video_frame(frame_data)
-
-                        if prediction:
-                            audio_data = self.text_to_speech(prediction)
-                            await partner.send(json.dumps({
-                                'type': 'interpretation',
-                                'text': prediction,
-                                'audio': audio_data
-                            }))
-
-                    elif message_type == 'audio' and client_role == 'normal':
-                        audio_data = data.get('data')
-                        text = self.process_audio(audio_data)
-
-                        if text:
-                            audio_data = self.text_to_speech(text)
-                            await partner.send(json.dumps({
-                                'type': 'interpretation',
-                                'text': text,
-                                'audio': audio_data
-                            }))
-                except json.JSONDecodeError as e:
-                    logger.error(f"Invalid JSON received: {e}")
-                    await websocket.send(json.dumps({
-                        'type': 'error',
-                        'message': 'Invalid message format'
-                    }))
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    await websocket.send(json.dumps({
-                        'type': 'error',
-                        'message': f'Server error: {str(e)}'
-                    }))
-
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("Client connection closed")
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as fp:
+                tts = gTTS(text=text, lang='en')
+                tts.save(fp.name)
+                with open(fp.name, 'rb') as audio_file:
+                    audio_data = audio_file.read()
+                os.unlink(fp.name)
+            logger.info(f"Text converted to speech: {text}")
+            return base64.b64encode(audio_data).decode('utf-8')
         except Exception as e:
-            logger.error(f"Unexpected error in handle_client: {e}")
-        finally:
-            await self.unregister(websocket)
+            logger.error(f"Error converting text to speech: {e}")
+            return None
+
+class CallManager:
+    def __init__(self):
+        self.calls = {}  # {call_id: CallConnection}
+
+    def create_or_join_call(self, call_id, user_id, websocket, role):
+        if call_id not in self.calls:
+            self.calls[call_id] = CallConnection(call_id)
+        
+        call = self.calls[call_id]
+        if call.add_user(user_id, websocket, role):
+            return call
+        return None
+
+    def remove_user_from_call(self, call_id, user_id):
+        if call_id in self.calls:
+            call = self.calls[call_id]
+            call.remove_user(user_id)
+            if len(call.users) == 0:
+                del self.calls[call_id]
+                return None
+            return call
+        return None
+
+call_manager = CallManager()
 
 async def handle_client(websocket, path):
-    room = None
+    call = None
+    user_id = None
+    call_id = None
+    
     try:
         logger.info(f"New connection from {websocket.remote_address}")
         
@@ -295,22 +150,20 @@ async def handle_client(websocket, path):
         message = await websocket.recv()
         data = json.loads(message)
         
-        if 'type' not in data:
-            raise ValueError("Message type not specified")
-
         if data['type'] == 'join':
-            room_id = data.get('roomId')
+            user_id = data.get('userId')
+            call_id = data.get('callId')
             role = data.get('role')
             
-            if not room_id or not role:
-                raise ValueError("Room ID and role are required")
+            if not all([user_id, call_id, role]):
+                raise ValueError("userId, callId, and role are required")
 
-            room = signal_server.create_or_join_room(room_id, websocket, role)
+            call = call_manager.create_or_join_call(call_id, user_id, websocket, role)
             
-            if not room:
+            if not call:
                 await websocket.send(json.dumps({
                     'type': 'error',
-                    'message': 'Room is full'
+                    'message': 'Call is full'
                 }))
                 return
 
@@ -318,34 +171,62 @@ async def handle_client(websocket, path):
             await websocket.send(json.dumps({
                 'type': 'connected',
                 'role': role,
-                'clients': len(room.clients)
+                'isCallReady': call.is_full()
             }))
 
-            # Notify other client if present
-            other_client = room.get_other_client(websocket)
-            if other_client:
-                await other_client.send(json.dumps({
+            # Notify other user if present
+            other_id, other_data = call.get_other_user(user_id)
+            if other_id:
+                await other_data['websocket'].send(json.dumps({
                     'type': 'user_joined',
                     'role': role
                 }))
 
-        # Handle WebRTC signaling
+        # Handle messages
         async for message in websocket:
+            if not call:
+                continue
+
             try:
                 data = json.loads(message)
                 message_type = data.get('type')
 
-                if not room:
-                    logger.error("No room found for client")
-                    continue
-
                 if message_type in ['offer', 'answer', 'ice-candidate']:
-                    other_client = room.get_other_client(websocket)
-                    if other_client:
-                        await other_client.send(message)
+                    # Handle WebRTC signaling
+                    other_id, other_data = call.get_other_user(user_id)
+                    if other_id:
+                        await other_data['websocket'].send(message)
                         logger.info(f"Forwarded {message_type} to peer")
                     else:
                         logger.warning(f"No peer found for {message_type}")
+
+                elif message_type == 'video_frame':
+                    # Handle sign language interpretation
+                    frame_data = data.get('data')
+                    prediction = call.process_video_frame(frame_data)
+                    if prediction:
+                        audio_data = call.text_to_speech(prediction)
+                        other_id, other_data = call.get_other_user(user_id)
+                        if other_id:
+                            await other_data['websocket'].send(json.dumps({
+                                'type': 'interpretation',
+                                'text': prediction,
+                                'audio': audio_data
+                            }))
+
+                elif message_type == 'audio':
+                    # Handle speech-to-text
+                    audio_data = data.get('data')
+                    text = call.process_audio(audio_data)
+                    if text:
+                        audio_data = call.text_to_speech(text)
+                        other_id, other_data = call.get_other_user(user_id)
+                        if other_id:
+                            await other_data['websocket'].send(json.dumps({
+                                'type': 'interpretation',
+                                'text': text,
+                                'audio': audio_data
+                            }))
 
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON: {e}")
@@ -366,13 +247,13 @@ async def handle_client(websocket, path):
         except:
             pass
     finally:
-        if room:
-            room = signal_server.remove_client(websocket)
-            if room:
-                other_client = room.get_other_client(websocket)
-                if other_client:
+        if call_id and user_id:
+            call = call_manager.remove_user_from_call(call_id, user_id)
+            if call:
+                other_id, other_data = call.get_other_user(user_id)
+                if other_id:
                     try:
-                        await other_client.send(json.dumps({
+                        await other_data['websocket'].send(json.dumps({
                             'type': 'user_left'
                         }))
                     except:
