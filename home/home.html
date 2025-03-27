@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignAI - Home</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="home.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-logo">
+            <img src="../assets/logo.png" alt="SignAI Logo">
+            <span>SignAI</span>
+        </div>
+        <div class="nav-links">
+            <a href="#" class="active">Home</a>
+            <div class="profile-dropdown">
+                <button class="profile-btn">Profile</button>
+                <div class="dropdown-content">
+                    <div class="user-info">
+                        <p class="username">Loading...</p>
+                        <p class="email">Loading...</p>
+                    </div>
+                    <button class="signout-btn">Sign Out</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>Available Users</h1>
+        <div class="users-grid" id="users-list">
+            <!-- Users will be dynamically added here -->
+        </div>
+    </main>
+
+    <!-- User Card Template -->
+    <template id="user-card-template">
+        <div class="user-card">
+            <div class="user-info">
+                <h3 class="user-name"></h3>
+                <p class="user-email"></p>
+            </div>
+            <button class="call-btn">Start Call</button>
+        </div>
+    </template>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-analytics.js";
+        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
+            authDomain: "signai-ea820.firebaseapp.com",
+            projectId: "signai-ea820",
+            storageBucket: "signai-ea820.firebasestorage.app",
+            messagingSenderId: "88913376198",
+            appId: "1:88913376198:web:bd13282673a2a8415fb8c7",
+            measurementId: "G-7W3MJTFNSR"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Check if user is authenticated
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                // Redirect to login if not authenticated
+                window.location.href = '../login/login.html';
+                return;
+            }
+
+            // Update profile dropdown with user info
+            document.querySelector('.username').textContent = user.displayName || 'User';
+            document.querySelector('.email').textContent = user.email;
+
+            // Load users from Firestore
+            loadUsers(user.uid);
+        });
+
+        // Load users from Firestore
+        async function loadUsers(currentUserId) {
+            try {
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const usersList = document.getElementById('users-list');
+                const template = document.getElementById('user-card-template');
+
+                usersSnapshot.forEach((doc) => {
+                    const userData = doc.data();
+                    // Don't show current user in the list
+                    if (doc.id !== currentUserId) {
+                        const userCard = template.content.cloneNode(true);
+                        userCard.querySelector('.user-name').textContent = userData.displayName || 'Anonymous';
+                        userCard.querySelector('.user-email').textContent = userData.email;
+                        
+                        // Add call button click handler
+                        userCard.querySelector('.call-btn').addEventListener('click', () => {
+                            // Store target user ID in session storage
+                            sessionStorage.setItem('callUserId', doc.id);
+                            // Redirect to call page
+                            window.location.href = '../call/call.html';
+                        });
+
+                        usersList.appendChild(userCard);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading users:', error);
+                alert('Error loading users. Please try again later.');
+            }
+        }
+
+        // Handle profile dropdown
+        const profileBtn = document.querySelector('.profile-btn');
+        const dropdownContent = document.querySelector('.dropdown-content');
+
+        profileBtn.addEventListener('click', () => {
+            dropdownContent.classList.toggle('show');
+        });
+
+        // Close dropdown when clicking outside
+        window.addEventListener('click', (event) => {
+            if (!event.target.matches('.profile-btn')) {
+                if (dropdownContent.classList.contains('show')) {
+                    dropdownContent.classList.remove('show');
+                }
+            }
+        });
+
+        // Handle sign out
+        document.querySelector('.signout-btn').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                window.location.href = '../login/login.html';
+            } catch (error) {
+                console.error('Error signing out:', error);
+                alert('Error signing out. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html> 

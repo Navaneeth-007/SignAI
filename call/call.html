@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignAI - Video Call</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="call.css">
+</head>
+<body>
+    <div class="call-container">
+        <nav class="call-nav">
+            <div class="nav-logo">
+                <img src="../assets/logo.png" alt="SignAI Logo">
+                <span>SignAI Call</span>
+            </div>
+            <button class="end-call-btn" onclick="window.location.href='../home/home.html'">End Call</button>
+        </nav>
+
+        <div class="video-container">
+            <div class="video-grid">
+                <div class="video-wrapper local-video">
+                    <video id="localVideo" autoplay playsinline muted></video>
+                    <div class="video-label">You</div>
+                </div>
+                <div class="video-wrapper remote-video">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <div class="video-label">Remote User</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="muteBtn" class="control-btn">
+                    <img src="../assets/mic.svg" alt="Mute" id="muteIcon">
+                </button>
+                <button id="videoBtn" class="control-btn">
+                    <img src="../assets/video.svg" alt="Video" id="videoIcon">
+                </button>
+                <button id="endCallBtn" class="control-btn end">
+                    <img src="../assets/end-call.svg" alt="End Call">
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
+            authDomain: "signai-ea820.firebaseapp.com",
+            projectId: "signai-ea820",
+            storageBucket: "signai-ea820.firebasestorage.app",
+            messagingSenderId: "88913376198",
+            appId: "1:88913376198:web:bd13282673a2a8415fb8c7",
+            measurementId: "G-7W3MJTFNSR"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let localStream;
+        let remoteStream;
+        let peerConnection;
+        let callDoc;
+        let callId;
+
+        const servers = {
+            iceServers: [
+                {
+                    urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'],
+                },
+            ],
+        };
+
+        // Get DOM elements
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const muteBtn = document.getElementById('muteBtn');
+        const videoBtn = document.getElementById('videoBtn');
+        const endCallBtn = document.getElementById('endCallBtn');
+
+        // Initialize call
+        async function initCall() {
+            const targetUserId = sessionStorage.getItem('callUserId');
+            if (!targetUserId) {
+                alert('No user selected for call');
+                window.location.href = '../home/home.html';
+                return;
+            }
+
+            try {
+                // Get local stream
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+
+                // Create peer connection
+                peerConnection = new RTCPeerConnection(servers);
+
+                // Add local tracks to peer connection
+                localStream.getTracks().forEach((track) => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    remoteVideo.srcObject = event.streams[0];
+                };
+
+                // Create call document
+                const callsRef = collection(db, 'calls');
+                callDoc = await addDoc(callsRef, {
+                    initiator: auth.currentUser.uid,
+                    target: targetUserId,
+                    status: 'pending'
+                });
+                callId = callDoc.id;
+
+                // Listen for remote answer
+                onSnapshot(doc(db, 'calls', callId), async (snapshot) => {
+                    const data = snapshot.data();
+                    if (data?.answer) {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    }
+                });
+
+                // Create and set local offer
+                const offerDescription = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offerDescription);
+
+                await updateDoc(callDoc, {
+                    offer: {
+                        type: offerDescription.type,
+                        sdp: offerDescription.sdp
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error initializing call:', error);
+                alert('Error starting call. Please try again.');
+            }
+        }
+
+        // Handle mute/unmute
+        muteBtn.addEventListener('click', () => {
+            const audioTrack = localStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            muteBtn.classList.toggle('muted');
+        });
+
+        // Handle video on/off
+        videoBtn.addEventListener('click', () => {
+            const videoTrack = localStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            videoBtn.classList.toggle('video-off');
+        });
+
+        // Handle end call
+        endCallBtn.addEventListener('click', async () => {
+            if (callId) {
+                await deleteDoc(doc(db, 'calls', callId));
+            }
+            localStream?.getTracks().forEach(track => track.stop());
+            window.location.href = '../home/home.html';
+        });
+
+        // Check authentication and initialize call
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                window.location.href = '../login/login.html';
+                return;
+            }
+            initCall();
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', async () => {
+            if (callId) {
+                await deleteDoc(doc(db, 'calls', callId));
+            }
+            localStream?.getTracks().forEach(track => track.stop());
+        });
+    </script>
+</body>
+</html> 

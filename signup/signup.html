@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignAI - Sign Up</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="signup.css">
+</head>
+<body>
+    <div class="signup-container">
+        <div class="logo">
+            <img src="../assets/logo.png" alt="SignAI Logo">
+        </div>
+        <h2>Create Your Account</h2>
+        <p>Join SignAI and start communicating seamlessly</p>
+        
+        <form id="signup-form" class="signup-form">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="fullname" 
+                    placeholder="Full Name" 
+                    required 
+                    aria-label="Full Name"
+                >
+            </div>
+
+            <div class="input-group">
+                <input 
+                    type="email" 
+                    id="email" 
+                    placeholder="Email Address" 
+                    required 
+                    aria-label="Email Address"
+                >
+            </div>
+            
+            <div class="input-group">
+                <input 
+                    type="password" 
+                    id="password" 
+                    placeholder="Password" 
+                    required 
+                    aria-label="Password"
+                >
+            </div>
+
+            <div class="input-group">
+                <input 
+                    type="password" 
+                    id="confirm-password" 
+                    placeholder="Confirm Password" 
+                    required 
+                    aria-label="Confirm Password"
+                >
+            </div>
+
+            <div class="terms-privacy">
+                <label>
+                    <input type="checkbox" id="terms" required>
+                    I agree to the Terms of Service and Privacy Policy
+                </label>
+            </div>
+            
+            <button type="submit" class="signup-btn">Create Account</button>
+        </form>
+
+        <div class="or-divider">
+            <span>OR</span>
+        </div>
+
+        <button class="google-signin-btn">
+            <img src="../assets/googlelogo.svg" alt="Google Logo">
+            Sign up with Google
+        </button>
+
+        <div class="login-link">
+            Already have an account? <a href="../login/login.html">Log In</a>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-analytics.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, updateProfile } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74",
+            authDomain: "signai-ea820.firebaseapp.com",
+            projectId: "signai-ea820",
+            storageBucket: "signai-ea820.firebasestorage.app",
+            messagingSenderId: "88913376198",
+            appId: "1:88913376198:web:bd13282673a2a8415fb8c7",
+            measurementId: "G-7W3MJTFNSR"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+        
+        // Configure Google Sign-in
+        provider.setCustomParameters({
+            prompt: 'select_account'
+        });
+
+        // Password validation function
+        function validatePassword(password) {
+            const minLength = 8;
+            const hasUpperCase = /[A-Z]/.test(password);
+            const hasLowerCase = /[a-z]/.test(password);
+            const hasNumbers = /\d/.test(password);
+            const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+            const errors = [];
+            if (password.length < minLength) errors.push('Password must be at least 8 characters long');
+            if (!hasUpperCase) errors.push('Include at least one uppercase letter');
+            if (!hasLowerCase) errors.push('Include at least one lowercase letter');
+            if (!hasNumbers) errors.push('Include at least one number');
+            if (!hasSpecialChar) errors.push('Include at least one special character');
+
+            return errors;
+        }
+
+        // Function to store user data in Firestore
+        async function storeUserData(user, additionalData = {}) {
+            try {
+                await setDoc(doc(db, 'users', user.uid), {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName || additionalData.displayName,
+                    photoURL: user.photoURL,
+                    createdAt: new Date().toISOString(),
+                    ...additionalData
+                });
+            } catch (error) {
+                console.error('Error storing user data:', error);
+                throw error;
+            }
+        }
+
+        // Handle regular email/password signup
+        document.getElementById('signup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fullname = document.getElementById('fullname').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const terms = document.getElementById('terms').checked;
+
+            // Validate password
+            const passwordErrors = validatePassword(password);
+            if (passwordErrors.length > 0) {
+                alert(passwordErrors.join('\n'));
+                return;
+            }
+
+            // Check if passwords match
+            if (password !== confirmPassword) {
+                alert('Passwords do not match');
+                return;
+            }
+
+            // Check terms acceptance
+            if (!terms) {
+                alert('Please accept the Terms of Service and Privacy Policy');
+                return;
+            }
+
+            try {
+                // Create user with email and password
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // Update user profile with full name
+                await updateProfile(user, {
+                    displayName: fullname
+                });
+
+                // Store user data in Firestore
+                await storeUserData(user, { displayName: fullname });
+
+                console.log('User created successfully:', user);
+                // Redirect to home page after successful signup
+                window.location.href = '../home/home.html';
+            } catch (error) {
+                console.error('Error:', error);
+                alert(error.message);
+            }
+        });
+
+        // Handle Google Sign-up
+        document.querySelector('.google-signin-btn').addEventListener('click', async () => {
+            try {
+                const result = await signInWithPopup(auth, provider);
+                const user = result.user;
+
+                // Store user data in Firestore
+                await storeUserData(user);
+
+                console.log('Google sign-up successful:', user);
+                // Redirect to home page after successful signup
+                window.location.href = '../home/home.html';
+            } catch (error) {
+                console.error('Error:', error);
+                if (error.code === 'auth/unauthorized-domain') {
+                    alert('This domain is not authorized for Google Sign-in. Please contact the administrator or try email/password signup.');
+                } else if (error.code === 'auth/popup-blocked') {
+                    alert('Please enable popups for this website to use Google Sign-in.');
+                } else if (error.code === 'auth/cancelled-popup-request') {
+                    // User closed the popup, no need to show an error
+                    return;
+                } else {
+                    alert(error.message);
+                }
+            }
+        });
+    </script>
+</body>
+</html> 
