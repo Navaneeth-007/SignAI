@@ -32,7 +32,7 @@ let currentUtterance = null;
 // API URL based on environment
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:8000'
-    : `https://${window.location.hostname}:8000`;
+    : 'https://signllm-backend.onrender.com';
 
 let lastPrediction = '';
 let predictionCount = 0;
