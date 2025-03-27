@@ -1,5 +1,10 @@
 import { collection, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+// Get WebSocket URL based on environment
+const WS_URL = window.location.hostname === 'localhost' 
+    ? 'ws://localhost:8765'
+    : `wss://${window.location.hostname.replace('signai-frontend', 'signai-websocket')}.onrender.com`;
+
 class CallConnection {
     constructor(firestore, auth, localVideo, remoteVideo, aiOutput) {
         this.db = firestore;
@@ -116,7 +121,7 @@ class CallConnection {
             return new Promise((resolve, reject) => {
                 try {
                     console.log('Attempting to connect to WebSocket server...');
-                    this.websocket = new WebSocket('ws://localhost:8765');
+                    this.websocket = new WebSocket(WS_URL);
 
                     this.websocket.onopen = () => {
                         console.log('Connected to WebSocket server, joining room:', this.roomId);

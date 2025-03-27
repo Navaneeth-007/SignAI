@@ -27,18 +27,19 @@ except ImportError as e:
     print(f"Looking in path: {model_dir}")
     sys.exit(1)
 
-# Ensure the log directory exists
-log_dir = current_dir / 'server'
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('server/websocket_server.log'),
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Get port from environment variable (for Heroku)
+PORT = int(os.environ.get("PORT", 8765))
+HOST = os.environ.get("HOST", "0.0.0.0")
 
 class CallRoom:
     def __init__(self, room_id):
@@ -381,9 +382,9 @@ async def handle_client(websocket, path):
 
 async def main():
     try:
-        logger.info("Starting WebSocket server...")
-        async with websockets.serve(handle_client, "localhost", 8765):
-            logger.info("WebSocket server is running on ws://localhost:8765")
+        logger.info(f"Starting WebSocket server on {HOST}:{PORT}...")
+        async with websockets.serve(handle_client, HOST, PORT):
+            logger.info(f"WebSocket server is running on ws://{HOST}:{PORT}")
             await asyncio.Future()  # run forever
     except Exception as e:
         logger.error(f"Server error: {e}")

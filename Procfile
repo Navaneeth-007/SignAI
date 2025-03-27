@@ -1,0 +1,1 @@
+web: python server/websocket_server.py 

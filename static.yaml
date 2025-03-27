@@ -1,0 +1,16 @@
+routes:
+  - type: rewrite
+    source: /.*
+    destination: /index.html
+  
+staticSites:
+  - name: signai-frontend
+    buildCommand: null  # No build command needed for static files
+    publishDir: .
+    envVars:
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false 
