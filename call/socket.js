@@ -1,3 +1,5 @@
+import { collection, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
 class CallConnection {
     constructor(firestore, auth, localVideo, remoteVideo, aiOutput) {
         this.db = firestore;
@@ -15,6 +17,7 @@ class CallConnection {
         this.callDoc = null;
         this.callId = null;
         this.userRole = null;
+        this.roomId = null;
 
         // WebRTC configuration
         this.servers = {
@@ -32,20 +35,31 @@ class CallConnection {
 
     async initializeCall(userRole, targetUserId) {
         this.userRole = userRole;
+        this.roomId = `${this.auth.currentUser.uid}_${targetUserId}`.split('').sort().join('');
+        console.log(`Initializing call as ${userRole} in room ${this.roomId}`);
         
         try {
             // Get local stream
+            console.log('Requesting media permissions...');
             this.localStream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: true
+            }).catch(error => {
+                console.error('Media permission error:', error.name, error.message);
+                throw new Error(`Failed to get camera/microphone access: ${error.message}`);
             });
+            
+            console.log('Media permissions granted, setting up local video');
             this.localVideo.srcObject = this.localStream;
 
             // Create peer connection
+            console.log('Creating peer connection...');
             this.peerConnection = new RTCPeerConnection(this.servers);
             
             // Add local tracks to peer connection
+            console.log('Adding local tracks to peer connection...');
             this.localStream.getTracks().forEach((track) => {
+                console.log(`Adding ${track.kind} track to peer connection`);
                 this.peerConnection.addTrack(track, this.localStream);
             });
 
@@ -53,78 +67,43 @@ class CallConnection {
             this.peerConnection.ontrack = (event) => {
                 console.log('Received remote track:', event.track.kind);
                 if (!this.remoteStream) {
+                    console.log('Creating new remote stream');
                     this.remoteStream = new MediaStream();
                     this.remoteVideo.srcObject = this.remoteStream;
                 }
+                console.log('Adding track to remote stream');
                 this.remoteStream.addTrack(event.track);
             };
 
-            // Create call document
-            const callsRef = collection(this.db, 'calls');
-            this.callDoc = await addDoc(callsRef, {
-                initiator: this.auth.currentUser.uid,
-                target: targetUserId,
-                status: 'pending',
-                initiatorRole: this.userRole
-            });
-            this.callId = this.callDoc.id;
+            // Handle connection state changes
+            this.peerConnection.onconnectionstatechange = () => {
+                console.log('Peer connection state:', this.peerConnection.connectionState);
+            };
+
+            this.peerConnection.oniceconnectionstatechange = () => {
+                console.log('ICE connection state:', this.peerConnection.iceConnectionState);
+            };
 
             // Handle ICE candidates
             this.peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    const candidate = {
-                        sdpMLineIndex: event.candidate.sdpMLineIndex,
-                        sdpMid: event.candidate.sdpMid,
-                        candidate: event.candidate.candidate
-                    };
-                    updateDoc(this.callDoc, {
-                        [`iceCandidates.${Date.now()}`]: candidate
+                    console.log('New ICE candidate:', event.candidate.type);
+                    this.sendWebSocketMessage({
+                        type: 'ice-candidate',
+                        candidate: event.candidate
                     });
                 }
             };
 
-            // Listen for remote answer and ICE candidates
-            onSnapshot(doc(this.db, 'calls', this.callId), async (snapshot) => {
-                const data = snapshot.data();
-                if (!this.peerConnection.currentRemoteDescription && data?.answer) {
-                    console.log('Setting remote description');
-                    const answerDescription = new RTCSessionDescription(data.answer);
-                    await this.peerConnection.setRemoteDescription(answerDescription);
-                }
-
-                if (data?.iceCandidates) {
-                    Object.values(data.iceCandidates).forEach(async (candidate) => {
-                        if (candidate && !this.addedCandidates?.has(JSON.stringify(candidate))) {
-                            try {
-                                await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                                this.addedCandidates = this.addedCandidates || new Set();
-                                this.addedCandidates.add(JSON.stringify(candidate));
-                            } catch (e) {
-                                console.warn('Error adding ICE candidate:', e);
-                            }
-                        }
-                    });
-                }
-            });
-
-            // Create and set local offer
-            const offerDescription = await this.peerConnection.createOffer();
-            await this.peerConnection.setLocalDescription(offerDescription);
-
-            await updateDoc(this.callDoc, {
-                offer: {
-                    type: offerDescription.type,
-                    sdp: offerDescription.sdp
-                }
-            });
-
-            // Connect to WebSocket server
+            // Connect to WebSocket server and join room
+            console.log('Connecting to WebSocket server...');
             await this.connectWebSocket();
 
             return true;
         } catch (error) {
             console.error('Error initializing call:', error);
-            throw error;
+            await this.cleanup();
+            throw new Error(`Call initialization failed: ${error.message}`);
         }
     }
 
@@ -140,36 +119,58 @@ class CallConnection {
                     this.websocket = new WebSocket('ws://localhost:8765');
 
                     this.websocket.onopen = () => {
-                        console.log('Connected to WebSocket server');
-                        retryCount = 0;
-                        // Send initial role
-                        this.websocket.send(JSON.stringify({ role: this.userRole }));
+                        console.log('Connected to WebSocket server, joining room:', this.roomId);
+                        // Join room
+                        this.sendWebSocketMessage({
+                            type: 'join',
+                            roomId: this.roomId,
+                            role: this.userRole
+                        });
                         resolve();
                     };
 
-                    this.websocket.onmessage = (event) => {
+                    this.websocket.onmessage = async (event) => {
                         const data = JSON.parse(event.data);
                         console.log('Received message:', data);
 
-                        if (data.type === 'connection_status') {
-                            if (data.status === 'connected') {
-                                console.log(`Connected as ${data.role} user`);
-                                if (this.userRole === 'accessibility') {
-                                    this.startVideoProcessing();
-                                } else {
-                                    this.startAudioProcessing();
+                        switch (data.type) {
+                            case 'connected':
+                                console.log(`Connected to room as ${data.role}`);
+                                if (data.clients === 2) {
+                                    // Create and send offer if we're the second client
+                                    await this.createAndSendOffer();
                                 }
-                            }
-                        } else if (data.type === 'interpretation') {
-                            this.interpretationText.textContent = data.text;
-                            this.aiOutput.classList.add('active');
+                                break;
 
-                            if (data.audio) {
-                                this.interpretationAudio.src = `data:audio/mp3;base64,${data.audio}`;
-                            }
-                        } else if (data.type === 'error') {
-                            console.error('Server error:', data.message);
-                            alert(`Error: ${data.message}`);
+                            case 'user_joined':
+                                console.log('Other user joined:', data.role);
+                                break;
+
+                            case 'user_left':
+                                console.log('Other user left');
+                                this.remoteStream = null;
+                                this.remoteVideo.srcObject = null;
+                                break;
+
+                            case 'offer':
+                                console.log('Received offer, creating answer');
+                                await this.handleOffer(data);
+                                break;
+
+                            case 'answer':
+                                console.log('Received answer');
+                                await this.handleAnswer(data);
+                                break;
+
+                            case 'ice-candidate':
+                                console.log('Received ICE candidate');
+                                await this.handleIceCandidate(data);
+                                break;
+
+                            case 'error':
+                                console.error('Server error:', data.message);
+                                alert(`Error: ${data.message}`);
+                                break;
                         }
                     };
 
@@ -199,6 +200,59 @@ class CallConnection {
         return connect();
     }
 
+    async createAndSendOffer() {
+        try {
+            const offer = await this.peerConnection.createOffer();
+            await this.peerConnection.setLocalDescription(offer);
+            this.sendWebSocketMessage({
+                type: 'offer',
+                sdp: this.peerConnection.localDescription
+            });
+        } catch (error) {
+            console.error('Error creating offer:', error);
+        }
+    }
+
+    async handleOffer(data) {
+        try {
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answer = await this.peerConnection.createAnswer();
+            await this.peerConnection.setLocalDescription(answer);
+            this.sendWebSocketMessage({
+                type: 'answer',
+                sdp: this.peerConnection.localDescription
+            });
+        } catch (error) {
+            console.error('Error handling offer:', error);
+        }
+    }
+
+    async handleAnswer(data) {
+        try {
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        } catch (error) {
+            console.error('Error handling answer:', error);
+        }
+    }
+
+    async handleIceCandidate(data) {
+        try {
+            if (data.candidate) {
+                await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            }
+        } catch (error) {
+            console.error('Error handling ICE candidate:', error);
+        }
+    }
+
+    sendWebSocketMessage(message) {
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify(message));
+        } else {
+            console.error('WebSocket is not connected');
+        }
+    }
+
     startVideoProcessing() {
         if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
             console.error('WebSocket not connected');
@@ -218,10 +272,10 @@ class CallConnection {
                 context.drawImage(this.localVideo, 0, 0, canvas.width, canvas.height);
 
                 const frameData = canvas.toDataURL('image/jpeg', 0.8);
-                this.websocket.send(JSON.stringify({
+                this.sendWebSocketMessage({
                     type: 'video_frame',
                     data: frameData
-                }));
+                });
 
                 isProcessingFrame = false;
             }
@@ -253,12 +307,10 @@ class CallConnection {
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64Audio = reader.result.split(',')[1];
-                if (this.websocket.readyState === WebSocket.OPEN) {
-                    this.websocket.send(JSON.stringify({
-                        type: 'audio',
-                        data: base64Audio
-                    }));
-                }
+                this.sendWebSocketMessage({
+                    type: 'audio',
+                    data: base64Audio
+                });
             };
             reader.readAsDataURL(audioBlob);
 
@@ -270,9 +322,6 @@ class CallConnection {
     }
 
     async cleanup() {
-        if (this.callDoc) {
-            await deleteDoc(doc(this.db, 'calls', this.callId));
-        }
         if (this.websocket) {
             this.websocket.close();
         }
