@@ -9,51 +9,85 @@ import os
 from pathlib import Path
 
 # Add the model directory to Python path
-sys.path.append(str(Path(__file__).parent.parent / 'model'))
+current_dir = Path(__file__).parent
+model_dir = current_dir.parent / 'model'
+sys.path.append(str(model_dir))
 
-from sign_interpreter import SignLanguageInterpreter
+try:
+    from sign_interpreter import SignLanguageInterpreter
+except ImportError as e:
+    print(f"Error importing SignLanguageInterpreter: {e}")
+    print(f"Looking in path: {model_dir}")
+    sys.exit(1)
+
 import speech_recognition as sr
 from gtts import gTTS
 import tempfile
 import threading
 import queue
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class SignAIServer:
     def __init__(self):
-        self.interpreter = SignLanguageInterpreter()
-        self.recognizer = sr.Recognizer()
-        self.clients = {}  # Store client websocket connections and their roles
-        self.audio_queue = queue.Queue()
+        try:
+            self.interpreter = SignLanguageInterpreter()
+            self.recognizer = sr.Recognizer()
+            self.clients = {}  # Store client websocket connections and their roles
+            self.audio_queue = queue.Queue()
+            logging.info("SignAI Server initialized successfully")
+        except Exception as e:
+            logging.error(f"Error initializing SignAI Server: {e}")
+            raise
         
     async def register(self, websocket, role):
         """Register a new client connection"""
         self.clients[websocket] = {"role": role, "partner": None}
+        logging.info(f"New client registered with role: {role}")
         
     async def unregister(self, websocket):
         """Unregister a client connection"""
         if websocket in self.clients:
+            role = self.clients[websocket]["role"]
             del self.clients[websocket]
+            logging.info(f"Client unregistered with role: {role}")
 
     def process_video_frame(self, frame_data):
         """Process video frame and return sign language interpretation"""
-        # Decode base64 image
-        img_bytes = base64.b64decode(frame_data.split(',')[1])
-        img_arr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
-        
-        # Get prediction from the model
-        prediction = self.interpreter.predict(frame)
-        return prediction
+        try:
+            # Decode base64 image
+            img_bytes = base64.b64decode(frame_data.split(',')[1])
+            img_arr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+            
+            # Get prediction from the model
+            prediction = self.interpreter.predict(frame)
+            if prediction:
+                logging.info(f"Prediction made: {prediction}")
+            return prediction
+        except Exception as e:
+            logging.error(f"Error processing video frame: {e}")
+            return None
 
     def text_to_speech(self, text):
         """Convert text to speech and return audio data"""
-        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as fp:
-            tts = gTTS(text=text, lang='en')
-            tts.save(fp.name)
-            with open(fp.name, 'rb') as audio_file:
-                audio_data = audio_file.read()
-            os.unlink(fp.name)
-        return base64.b64encode(audio_data).decode('utf-8')
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as fp:
+                tts = gTTS(text=text, lang='en')
+                tts.save(fp.name)
+                with open(fp.name, 'rb') as audio_file:
+                    audio_data = audio_file.read()
+                os.unlink(fp.name)
+            logging.info(f"Text converted to speech: {text}")
+            return base64.b64encode(audio_data).decode('utf-8')
+        except Exception as e:
+            logging.error(f"Error converting text to speech: {e}")
+            return None
 
     def process_audio(self, audio_data):
         """Process audio and return transcribed text"""
@@ -69,13 +103,15 @@ class SignAIServer:
                     text = self.recognizer.recognize_google(audio)
                 
             os.unlink(fp.name)
+            logging.info(f"Audio processed to text: {text}")
             return text
         except Exception as e:
-            print(f"Error processing audio: {e}")
+            logging.error(f"Error processing audio: {e}")
             return None
 
     async def handle_client(self, websocket, path):
         """Handle client connection and messages"""
+        client_info = None
         try:
             # Wait for initial role message
             message = await websocket.recv()
@@ -83,56 +119,85 @@ class SignAIServer:
             role = data.get('role')
             
             await self.register(websocket, role)
+            client_info = f"Client with role {role}"
+            logging.info(f"{client_info} connected")
+            
+            # Send confirmation to client
+            await websocket.send(json.dumps({
+                'type': 'connection_status',
+                'status': 'connected',
+                'role': role
+            }))
             
             async for message in websocket:
-                data = json.loads(message)
-                message_type = data.get('type')
-                
-                if message_type == 'video_frame' and role == 'accessibility':
-                    # Process sign language video
-                    frame_data = data.get('data')
-                    prediction = self.process_video_frame(frame_data)
+                try:
+                    data = json.loads(message)
+                    message_type = data.get('type')
                     
-                    if prediction:
-                        # Convert prediction to speech for regular user
-                        audio_data = self.text_to_speech(prediction)
+                    if message_type == 'video_frame' and role == 'accessibility':
+                        frame_data = data.get('data')
+                        prediction = self.process_video_frame(frame_data)
                         
-                        # Send to regular user
-                        for client, info in self.clients.items():
-                            if info['role'] == 'normal':
-                                await client.send(json.dumps({
-                                    'type': 'interpretation',
-                                    'text': prediction,
-                                    'audio': audio_data
-                                }))
-                
-                elif message_type == 'audio' and role == 'normal':
-                    # Process speech from regular user
-                    audio_data = data.get('data')
-                    text = self.process_audio(audio_data)
+                        if prediction:
+                            audio_data = self.text_to_speech(prediction)
+                            
+                            for client, info in self.clients.items():
+                                if info['role'] == 'normal':
+                                    await client.send(json.dumps({
+                                        'type': 'interpretation',
+                                        'text': prediction,
+                                        'audio': audio_data
+                                    }))
                     
-                    if text:
-                        # Convert to speech for accessibility user
-                        audio_data = self.text_to_speech(text)
+                    elif message_type == 'audio' and role == 'normal':
+                        audio_data = data.get('data')
+                        text = self.process_audio(audio_data)
                         
-                        # Send to accessibility user
-                        for client, info in self.clients.items():
-                            if info['role'] == 'accessibility':
-                                await client.send(json.dumps({
-                                    'type': 'interpretation',
-                                    'text': text,
-                                    'audio': audio_data
-                                }))
-                                
+                        if text:
+                            audio_data = self.text_to_speech(text)
+                            
+                            for client, info in self.clients.items():
+                                if info['role'] == 'accessibility':
+                                    await client.send(json.dumps({
+                                        'type': 'interpretation',
+                                        'text': text,
+                                        'audio': audio_data
+                                    }))
+                except Exception as e:
+                    logging.error(f"Error processing message from {client_info}: {e}")
+                    await websocket.send(json.dumps({
+                        'type': 'error',
+                        'message': str(e)
+                    }))
+                    
         except websockets.exceptions.ConnectionClosed:
-            pass
+            logging.info(f"{client_info} connection closed")
+        except Exception as e:
+            logging.error(f"Error handling {client_info}: {e}")
         finally:
-            await self.unregister(websocket)
+            if websocket in self.clients:
+                await self.unregister(websocket)
+                logging.info(f"{client_info} unregistered")
 
 async def main():
     server = SignAIServer()
-    async with websockets.serve(server.handle_client, "localhost", 8765):
-        await asyncio.Future()  # run forever
+    host = "0.0.0.0"  # Listen on all available interfaces
+    port = 8765
+    
+    logging.info(f"Starting WebSocket server on ws://{host}:{port}")
+    
+    try:
+        async with websockets.serve(server.handle_client, host, port):
+            await asyncio.Future()  # run forever
+    except Exception as e:
+        logging.error(f"Failed to start server: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Server stopped by user")
+    except Exception as e:
+        logging.error(f"Server error: {e}")
+        sys.exit(1) 

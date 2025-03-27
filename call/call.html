@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SignAI - Video Call</title>
+    <link rel="icon" type="image/x-icon" href="../assets/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="call.css">
 </head>
@@ -82,7 +83,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -133,44 +134,79 @@
         const interpretationText = aiOutput.querySelector('.interpretation-text');
         const interpretationAudio = document.getElementById('interpretationAudio');
 
-        // Connect to WebSocket server
+        // Connect to WebSocket server with retry
         function connectWebSocket() {
-            websocket = new WebSocket('ws://localhost:8765');
+            let retryCount = 0;
+            const maxRetries = 3;
+            const retryDelay = 2000; // 2 seconds
             
-            websocket.onopen = () => {
-                console.log('Connected to WebSocket server');
-                // Send initial role
-                websocket.send(JSON.stringify({ role: userRole }));
-                
-                // Start processing if accessibility user
-                if (userRole === 'accessibility') {
-                    startVideoProcessing();
-                } else {
-                    startAudioProcessing();
-                }
-            };
-            
-            websocket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'interpretation') {
-                    // Display text interpretation
-                    interpretationText.textContent = data.text;
-                    aiOutput.classList.add('active');
+            function connect() {
+                try {
+                    console.log('Attempting to connect to WebSocket server...');
+                    websocket = new WebSocket('ws://localhost:8765');
                     
-                    // Play audio interpretation
-                    if (data.audio) {
-                        interpretationAudio.src = `data:audio/mp3;base64,${data.audio}`;
+                    websocket.onopen = () => {
+                        console.log('Connected to WebSocket server');
+                        retryCount = 0;
+                        // Send initial role
+                        websocket.send(JSON.stringify({ role: userRole }));
+                    };
+                    
+                    websocket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        console.log('Received message:', data);
+                        
+                        if (data.type === 'connection_status') {
+                            if (data.status === 'connected') {
+                                console.log(`Connected as ${data.role} user`);
+                                // Start processing based on role
+                                if (userRole === 'accessibility') {
+                                    startVideoProcessing();
+                                } else {
+                                    startAudioProcessing();
+                                }
+                            }
+                        } else if (data.type === 'interpretation') {
+                            // Display text interpretation
+                            interpretationText.textContent = data.text;
+                            aiOutput.classList.add('active');
+                            
+                            // Play audio interpretation
+                            if (data.audio) {
+                                interpretationAudio.src = `data:audio/mp3;base64,${data.audio}`;
+                            }
+                        } else if (data.type === 'error') {
+                            console.error('Server error:', data.message);
+                            alert(`Error: ${data.message}`);
+                        }
+                    };
+                    
+                    websocket.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                    };
+                    
+                    websocket.onclose = (event) => {
+                        console.log('WebSocket connection closed:', event.code, event.reason);
+                        if (retryCount < maxRetries) {
+                            retryCount++;
+                            console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
+                            setTimeout(connect, retryDelay);
+                        } else {
+                            console.error('Failed to connect to WebSocket server after multiple attempts');
+                            alert('Could not connect to the interpretation server. Please try refreshing the page.');
+                        }
+                    };
+                } catch (error) {
+                    console.error('Error creating WebSocket connection:', error);
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        console.log(`Retrying connection (${retryCount}/${maxRetries})...`);
+                        setTimeout(connect, retryDelay);
                     }
                 }
-            };
+            }
             
-            websocket.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-            
-            websocket.onclose = () => {
-                console.log('Disconnected from WebSocket server');
-            };
+            connect();
         }
 
         // Process video frames for sign language interpretation
@@ -271,7 +307,29 @@
 
                 // Handle remote stream
                 peerConnection.ontrack = (event) => {
-                    remoteVideo.srcObject = event.streams[0];
+                    console.log('Received remote track:', event.track.kind);
+                    if (event.track.kind === 'video') {
+                        if (!remoteVideo.srcObject) {
+                            remoteVideo.srcObject = new MediaStream();
+                        }
+                        remoteVideo.srcObject.addTrack(event.track);
+                        console.log('Remote video track added');
+                    }
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        // Serialize the ICE candidate before storing
+                        const serializedCandidate = {
+                            sdpMLineIndex: event.candidate.sdpMLineIndex,
+                            sdpMid: event.candidate.sdpMid,
+                            candidate: event.candidate.candidate
+                        };
+                        updateDoc(callDoc, {
+                            iceCandidates: arrayUnion(serializedCandidate)
+                        });
+                    }
                 };
 
                 // Create call document with role
@@ -287,11 +345,20 @@
                 // Update UI with role
                 roleIndicator.textContent = `Role: ${userRole === 'accessibility' ? 'Accessibility User' : 'Regular User'}`;
 
-                // Listen for remote answer
+                // Listen for remote ICE candidates
                 onSnapshot(doc(db, 'calls', callId), async (snapshot) => {
                     const data = snapshot.data();
                     if (data?.answer) {
                         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    }
+                    if (data?.iceCandidates) {
+                        for (const candidate of data.iceCandidates) {
+                            try {
+                                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                            } catch (e) {
+                                console.warn('Error adding ICE candidate:', e);
+                            }
+                        }
                     }
                 });
 
