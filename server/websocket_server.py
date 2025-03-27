@@ -37,9 +37,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Get port from environment variable (for Heroku)
-PORT = int(os.environ.get("PORT", 8765))
-HOST = os.environ.get("HOST", "0.0.0.0")
+# Get port from environment variable (for Render)
+PORT = int(os.environ.get("PORT", "10000"))
 
 class CallRoom:
     def __init__(self, room_id):
@@ -382,9 +381,9 @@ async def handle_client(websocket, path):
 
 async def main():
     try:
-        logger.info(f"Starting WebSocket server on {HOST}:{PORT}...")
-        async with websockets.serve(handle_client, HOST, PORT):
-            logger.info(f"WebSocket server is running on ws://{HOST}:{PORT}")
+        logger.info(f"Starting WebSocket server on port {PORT}...")
+        async with websockets.serve(handle_client, "0.0.0.0", PORT):
+            logger.info(f"WebSocket server is running on port {PORT}")
             await asyncio.Future()  # run forever
     except Exception as e:
         logger.error(f"Server error: {e}")

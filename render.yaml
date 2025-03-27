@@ -1,15 +1,15 @@
 services:
   - type: web
-    name: signai-app
+    name: signai-websocket
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python server/websocket_server.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.12
+      - key: PORT
+        value: 10000
     autoDeploy: true
-    port: 10000
-    host: 0.0.0.0
     envVars:
       - key: FIREBASE_API_KEY
         value: AIzaSyB9xPOobDKznWSxkWxTngBarSEOqdjRr74
