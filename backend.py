@@ -24,8 +24,7 @@ CORS(app, resources={
         "origins": ["http://localhost:5000", 
                    "http://127.0.0.1:5000", 
                    "http://localhost:8000", 
-                   "http://127.0.0.1:8000",
-                   "https://signllm.onrender.com"],
+                   "http://127.0.0.1:8000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
