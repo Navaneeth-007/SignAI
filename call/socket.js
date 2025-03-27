@@ -1,9 +1,11 @@
 import { collection, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-firestore.js";
 
 // Get WebSocket URL based on environment
-const WS_URL = window.location.hostname === 'localhost' 
-    ? 'ws://localhost:10000'  // Updated to match the Python server port
+const WS_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? `ws://${window.location.hostname}:10000`
     : `wss://${window.location.hostname.replace('signai-frontend', 'signai-websocket')}.onrender.com`;
+
+console.log('WebSocket URL:', WS_URL); // Add logging to verify URL
 
 class CallConnection {
     constructor(firestore, auth, localVideo, remoteVideo, aiOutput) {

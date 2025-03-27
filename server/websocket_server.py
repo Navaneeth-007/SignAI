@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Get port from environment variable (for Render)
 PORT = int(os.environ.get("PORT", "10000"))
+HOST = "0.0.0.0"  # Bind to all interfaces
 
 class CallConnection:
     def __init__(self, call_id):
@@ -261,14 +262,16 @@ async def handle_client(websocket, path):
         logger.info("Client cleanup completed")
 
 async def main():
-    try:
-        logger.info(f"Starting WebSocket server on port {PORT}...")
-        async with websockets.serve(handle_client, "0.0.0.0", PORT):
-            logger.info(f"WebSocket server is running on port {PORT}")
-            await asyncio.Future()  # run forever
-    except Exception as e:
-        logger.error(f"Server error: {e}")
-        sys.exit(1)
+    logger.info(f"Starting WebSocket server on {HOST}:{PORT}")
+    async with websockets.serve(
+        handle_client,
+        host=HOST,
+        port=PORT,
+        ping_interval=20,
+        ping_timeout=20,
+        close_timeout=10
+    ):
+        await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
     try:
@@ -276,5 +279,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
-        logger.error(f"Server crashed: {e}")
+        logger.error(f"Server error: {e}")
         sys.exit(1)
