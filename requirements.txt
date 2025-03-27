@@ -1,21 +1,20 @@
-websockets==12.0
-opencv-python-headless==4.8.0.74
-numpy>=1.24.3
-SpeechRecognition==3.10.0
-gTTS==2.3.2
-mediapipe==0.10.11
-protobuf>=3.11,<4.0.0
-scikit-learn==1.2.0
-scipy>=1.9.0
-torch>=2.0.0
-torchvision>=0.15.0
 flask==3.0.2
 flask-cors==4.0.0
+gunicorn==21.2.0
+numpy==1.26.4
+opencv-python-headless==4.9.0.80
+mediapipe==0.10.9
+textblob==0.17.1
+gTTS==2.5.1
+torch==2.2.1
 
 # For Mac M1/M2 (Apple Silicon)
 --find-links https://download.pytorch.org/whl/torch_stable.html
-torch==2.2.1
-torchvision==0.17.1
+torchvision>=0.15.0
+protobuf>=3.11,<4.0.0
+scikit-learn==1.2.0
+scipy>=1.9.0
+SpeechRecognition==3.10.0
 
 # TensorFlow for Mac (install separately)
 # tensorflow-macos==2.16.2

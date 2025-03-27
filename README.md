@@ -1,96 +1,59 @@
-# SignAI - Real-time Sign Language Interpretation
+# SignLLM - Sign Language Recognition
 
-A real-time video calling application with sign language interpretation capabilities.
+A real-time sign language recognition application that uses machine learning to interpret sign language gestures and convert them into text and speech.
 
 ## Features
 
-- Real-time video calls
-- Sign language interpretation
-- Text-to-speech output
-- User authentication with Firebase
-- WebRTC peer-to-peer connections
+- Real-time sign language recognition using webcam
+- Text-to-speech conversion of recognized signs
+- Automatic spell correction
+- Continuous recognition with word building
+- Clean and intuitive user interface
 
-## Deployment Instructions
+## Live Demo
 
-### Prerequisites
+Visit the application at: [https://signllm.onrender.com](https://signllm.onrender.com)
 
-1. Create a [Render.com](https://render.com) account
-2. Install [Git](https://git-scm.com/)
-3. Have a [Firebase](https://firebase.google.com/) project set up
+## Technology Stack
 
-### Deployment Steps
+- Frontend:
+  - HTML/CSS/JavaScript
+  - MediaPipe for hand tracking
+  - Web Speech API for text-to-speech
+  
+- Backend:
+  - Python/Flask
+  - OpenCV for image processing
+  - MediaPipe for hand landmark detection
+  - Machine Learning model for sign recognition
+  - gTTS for high-quality speech synthesis
 
-1. Push your code to a GitHub repository:
+## Local Development
+
+1. Clone the repository:
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin YOUR_GITHUB_REPO_URL
-git push -u origin main
+git clone https://github.com/[your-github-username]/SignLlm.git
+cd SignLlm
 ```
 
-2. On Render.com:
-   - Click "New +"
-   - Select "Blueprint"
-   - Connect your GitHub repository
-   - Click "Connect"
-
-3. Render will automatically detect the `render.yaml` and create two services:
-   - `signai-frontend`: Static site hosting the web interface
-   - `signai-websocket`: Python service running the WebSocket server
-
-4. Add environment variables in Render dashboard:
-   - For frontend service:
-     - `VITE_WS_URL`: WebSocket server URL (will be automatically set)
-   - For WebSocket service:
-     - `PORT`: 10000 (already set in render.yaml)
-     - `PYTHON_VERSION`: 3.8.0 (already set in render.yaml)
-
-5. Your app will be deployed to:
-   - Frontend: `https://signai-frontend.onrender.com`
-   - WebSocket: `wss://signai-websocket.onrender.com`
-
-### Local Development
-
-1. Install dependencies:
+2. Install Python dependencies:
 ```bash
-npm install
 pip install -r requirements.txt
 ```
 
-2. Start the frontend:
+3. Run the backend server:
 ```bash
-npm start
+python backend.py
 ```
 
-3. Start the WebSocket server:
-```bash
-python server/websocket_server.py
-```
+4. Open the frontend in a web browser:
+- Navigate to `home/home.html`
+- Or serve using a local server (e.g., `python -m http.server`)
 
-4. Access the app at `http://localhost:3000`
+## Contributing
 
-## Environment Variables
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-- `VITE_WS_URL`: WebSocket server URL
-- `PORT`: Port for WebSocket server
-- `PYTHON_VERSION`: Python version for the server
+## License
 
-## Firebase Configuration
-
-Update the Firebase configuration in `call/call.html` with your project details:
-
-```javascript
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
-```
-
-## Support
-
-For issues and support, please create an issue in the GitHub repository. 
+This project is licensed under the MIT License - see the LICENSE file for details. 

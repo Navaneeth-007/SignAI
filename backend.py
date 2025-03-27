@@ -25,7 +25,7 @@ CORS(app, resources={
                    "http://127.0.0.1:5000", 
                    "http://localhost:8000", 
                    "http://127.0.0.1:8000",
-                   "https://signllm-frontend.onrender.com"],
+                   "https://signllm.onrender.com"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
@@ -317,5 +317,11 @@ def health_check():
     })
 
 if __name__ == "__main__":
+    # Load the model when the application starts
+    if not load_model():
+        logger.error("Failed to load model")
+        model = None
+    
+    # Get port from environment variable
     port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port)

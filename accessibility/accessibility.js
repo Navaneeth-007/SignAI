@@ -32,7 +32,7 @@ let currentUtterance = null;
 // API URL based on environment
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:8000'
-    : 'https://signllm-backend.onrender.com';
+    : 'https://signllm.onrender.com';
 
 let lastPrediction = '';
 let predictionCount = 0;
@@ -424,80 +424,4 @@ async function stopRecognition() {
 
     } catch (error) {
         console.error('Error stopping recognition:', error);
-        updateStatus(`Error: ${error.message}`, true);
-    } finally {
-        isRecognizing = false;
-        startButton.disabled = false;
-        stopButton.disabled = true;
-        updateStatus('Recognition stopped');
-        updateRecognizedText('Recognition stopped');
-    }
-}
-
-// Clean up function
-async function cleanup() {
-    // Stop recognition if active
-    if (isRecognizing) {
-        await stopRecognition();
-    }
-    
-    // Stop all video tracks
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-    }
-    
-    // Cancel any ongoing speech
-    if (currentUtterance) {
-        speechSynthesis.cancel();
-    }
-}
-
-// Initialize everything when the page loads
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Page loaded, initializing...');
-    
-    // Initialize speech synthesis
-    initSpeechSynthesis();
-    
-    // Verify all elements are present
-    if (!verifyElements()) {
-        console.error('Missing required DOM elements');
-        return;
-    }
-
-    try {
-        // Check if browser supports getUserMedia
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Your browser does not support camera access');
-        }
-
-        // Initialize video
-        await initializeVideo();
-        
-        // Check server health
-        if (await checkServerHealth()) {
-            updateStatus('Ready to start recognition');
-        } else {
-            updateStatus('Warning: Recognition server not available', true);
-        }
-    } catch (error) {
-        console.error('Initialization error:', error);
-        updateStatus(`Error: ${error.message}`, true);
-    }
-});
-
-// Event listeners for buttons
-if (startButton && stopButton) {
-    startButton.addEventListener('click', startRecognition);
-    stopButton.addEventListener('click', stopRecognition);
-}
-
-// Clean up when leaving the page
-window.addEventListener('beforeunload', cleanup);
-
-// Add cleanup to navigation button
-document.querySelector('.nav-button').addEventListener('click', async (e) => {
-    e.preventDefault(); // Prevent immediate navigation
-    await cleanup();
-    window.location.href = '../home/home.html';
-}); 
+        updateStatus(`
