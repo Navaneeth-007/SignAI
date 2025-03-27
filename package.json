@@ -1,0 +1,12 @@
+{
+  "name": "signai",
+  "version": "1.0.0",
+  "description": "SignAI - Real-time Sign Language Interpretation",
+  "scripts": {
+    "build": "mkdir -p dist && cp -r assets call home login index.html dist/",
+    "start": "python -m http.server 3000"
+  },
+  "dependencies": {
+    "firebase": "^10.8.0"
+  }
+} 
