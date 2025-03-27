@@ -104,10 +104,8 @@
                         
                         // Add call button click handler
                         userCard.querySelector('.call-btn').addEventListener('click', () => {
-                            // Store target user ID in session storage
-                            sessionStorage.setItem('callUserId', doc.id);
-                            // Redirect to call page
-                            window.location.href = '../call/call.html';
+                            // Redirect to call page with target user ID as URL parameter
+                            window.location.href = `../call/call.html?targetId=${doc.id}`;
                         });
 
                         usersList.appendChild(userCard);
