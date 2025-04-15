@@ -1,4 +1,4 @@
-# SignLLM - Sign Language Recognition
+# SignAI - Sign Language Recognition
 
 A real-time sign language recognition application that uses machine learning to interpret sign language gestures and convert them into text and speech.
 
