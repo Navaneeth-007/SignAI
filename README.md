@@ -1,59 +1,99 @@
-# SignAI - Sign Language Recognition
+# SignAI 2.0 – AI-Powered Sign Language Recognition
 
-A real-time sign language recognition application that uses machine learning to interpret sign language gestures and convert them into text and speech.
+> **SignAI 2.0** is the next-generation version of SignAI, featuring improved sign language recognition, enhanced AI models, faster inference, and a more refined user experience. Built upon SignAI 1.0, this version focuses on delivering higher accuracy and smoother real-time interaction.
 
-## Features
+---
 
-- Real-time sign language recognition using webcam
-- Text-to-speech conversion of recognized signs
+## 📖 Overview
+
+SignAI 2.0 is an AI-powered web application that recognizes sign language gestures in real time using a webcam and converts them into readable text and natural speech. The system combines computer vision, machine learning, and natural language processing to provide an accessible communication tool for sign language users.
+
+Compared to **SignAI 1.0**, this version introduces improved recognition accuracy, continuous sentence formation, automatic spell correction, enhanced speech synthesis, and a cleaner, more responsive interface.
+
+---
+
+## ✨ Features
+
+- 🤟 Real-time sign language recognition using a webcam
+- 🧠 Enhanced machine learning model for improved recognition accuracy
+- ✍️ Automatic spell correction
+- 📝 Continuous word and sentence formation
+- 🔊 Text-to-Speech (TTS) conversion
+- 📷 Real-time hand tracking using MediaPipe
+- ⚡ Faster inference and optimized performance
+- 🎨 Modern, responsive, and user-friendly interface
+
+---
+
+## 📸 Screenshots
+
+### 🤟 Real-Time Recognition
+
+<p align="center">
+
+  <img src="screenshots/recognizing.png" alt="Recognizing Sign Language" width="900">
+
+</p>
+
+The application captures live webcam input, detects hand landmarks using MediaPipe, and performs real-time sign language recognition.
+
+---
+
+### ✅ Recognition Result
+
+<p align="center">
+
+  <img src="screenshots/recognized.png" alt="Recognition Result" width="900">
+
+</p>
+
+The recognized gesture is converted into text, automatically corrected if necessary, and can be spoken aloud using the integrated Text-to-Speech engine.
+
+
+## 🛠️ Technology Stack
+
+### Frontend
+
+- HTML5
+- CSS3
+- JavaScript
+- MediaPipe Hands
+- Web Speech API
+
+### Backend
+
+- Python
+- Flask
+- OpenCV
+- MediaPipe
+- Machine Learning Model
+- gTTS (Google Text-to-Speech)
+
+---
+
+## 🆕 Improvements Over SignAI 1.0
+
+- Improved sign recognition accuracy
+- Better-trained machine learning model
+- Faster real-time inference
+- Continuous sentence generation
 - Automatic spell correction
-- Continuous recognition with word building
-- Clean and intuitive user interface
+- Improved speech synthesis
+- Cleaner and more intuitive UI
+- Better overall user experience
 
-## Live Demo
+---
 
-Visit the application at: [https://signllm.onrender.com](https://signllm.onrender.com)
+## 📄 License
 
-## Technology Stack
+This project is licensed under the MIT License.
 
-- Frontend:
-  - HTML/CSS/JavaScript
-  - MediaPipe for hand tracking
-  - Web Speech API for text-to-speech
-  
-- Backend:
-  - Python/Flask
-  - OpenCV for image processing
-  - MediaPipe for hand landmark detection
-  - Machine Learning model for sign recognition
-  - gTTS for high-quality speech synthesis
+---
 
-## Local Development
+## 👨‍💻 Author
 
-1. Clone the repository:
-```bash
-git clone https://github.com/[your-github-username]/SignLlm.git
-cd SignLlm
-```
+**Navaneeth S**
 
-2. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
+M.Tech in Computer Science (Artificial Intelligence & Machine Learning)
 
-3. Run the backend server:
-```bash
-python backend.py
-```
-
-4. Open the frontend in a web browser:
-- Navigate to `home/home.html`
-- Or serve using a local server (e.g., `python -m http.server`)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+Amrita School of Computing
